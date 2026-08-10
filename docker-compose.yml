@@ -1,0 +1,34 @@
+services:
+  mongo:
+    image: mongo:7
+    container_name: gmail-reminder-mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: gmail-reminder-backend
+    ports:
+      - "8000:8000"
+    env_file: .env
+    environment:
+      - MONGO_URI=mongodb://mongo:27017
+      - MONGO_DB=gmail_reminder
+      # Accesses the WhatsApp bridge on localhost inside the same container
+      - WHATSAPP_SERVICE_URL=http://localhost:3000
+    volumes:
+      - ./tokens:/app/tokens
+      - ./logs:/app/logs
+      # Bind mount the WhatsApp bridge session volume so sessions persist on the host
+      - ./whatsapp-bridge/session:/app/whatsapp-bridge/session
+    depends_on:
+      - mongo
+    restart: unless-stopped
+
+volumes:
+  mongo_data:

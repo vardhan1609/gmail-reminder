@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gmail Reminder — Dashboard</title>
+  <meta name="description" content="Admin dashboard for Gmail Reminder System: connect Gmail accounts, configure destinations, manage routing rules and reminders.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/dashboard.css">
+  <link rel="icon" type="image/svg+xml" href="/static/assets/favicon.svg">
+</head>
+<body>
+  <!-- Animated background -->
+  <div class="bg-mesh"></div>
+
+  <!-- Sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-logo">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+      </div>
+      <div>
+        <h1 class="sidebar-title">Gmail Reminder</h1>
+        <span class="sidebar-sub">Dashboard</span>
+      </div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <button class="nav-item active" data-section="accounts" id="navAccounts">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        Gmail Accounts
+      </button>
+      <button class="nav-item" data-section="destinations" id="navDestinations">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        Destinations
+      </button>
+      <button class="nav-item" data-section="routing" id="navRouting">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>
+        Routing Rules
+      </button>
+      <button class="nav-item" data-section="emails" id="navEmails">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+        Emails
+      </button>
+      <button class="nav-item" data-section="reminders" id="navReminders">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+        Reminders
+      </button>
+
+      <div style="height:8px;border-top:1px solid rgba(255,255,255,0.06);margin:8px 0;"></div>
+
+      <button class="nav-item" data-section="whatsapp" id="navWhatsapp">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+        WhatsApp Bridge
+      </button>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="health-indicator" id="healthIndicator">
+        <span class="health-dot"></span>
+        <span class="health-text">Checking…</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Mobile topbar -->
+  <div class="mobile-topbar">
+    <button class="menu-toggle" id="menuToggle" aria-label="Toggle menu">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+    <span class="mobile-title">Gmail Reminder</span>
+  </div>
+
+  <!-- Main content -->
+  <main class="main" id="main">
+
+    <!-- ═══════ ACCOUNTS SECTION ═══════ -->
+    <section class="section active" id="sectionAccounts">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title">Gmail Accounts</h2>
+          <p class="section-desc">Connect and manage Gmail mailboxes. Each mailbox is polled independently for new emails.</p>
+        </div>
+        <button class="btn btn-primary" id="btnConnectGmail" onclick="connectGmail()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Connect Gmail
+        </button>
+      </div>
+
+      <!-- OAuth Status Banner -->
+      <div class="oauth-banner" id="oauthBanner" style="display:none;">
+        <div class="oauth-banner-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+        </div>
+        <div class="oauth-banner-text">
+          <strong>Account connected successfully!</strong>
+          <span id="oauthBannerEmail"></span>
+        </div>
+        <button class="oauth-banner-close" onclick="document.getElementById('oauthBanner').style.display='none'">×</button>
+      </div>
+
+      <!-- Accounts list -->
+      <div class="card-grid" id="accountsList">
+        <div class="empty-state" id="accountsEmpty">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+          <h3>No accounts connected</h3>
+          <p>Click <strong>Connect Gmail</strong> to link your first mailbox.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════ DESTINATIONS SECTION ═══════ -->
+    <section class="section" id="sectionDestinations">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title">Destinations</h2>
+          <p class="section-desc">WhatsApp groups, Meta 1:1, and Telegram groups where reminders are sent.</p>
+        </div>
+        <button class="btn btn-primary" onclick="showAddDestination()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Add Destination
+        </button>
+      </div>
+
+      <div class="card-grid" id="destinationsList">
+        <div class="empty-state" id="destinationsEmpty">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+          <h3>No destinations</h3>
+          <p>Add a WhatsApp or Telegram group to start receiving reminders.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════ ROUTING SECTION ═══════ -->
+    <section class="section" id="sectionRouting">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title">Routing Rules</h2>
+          <p class="section-desc">Control which emails go to which destinations based on account and category.</p>
+        </div>
+        <button class="btn btn-primary" onclick="showAddRoutingRule()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Add Rule
+        </button>
+      </div>
+
+      <div class="table-wrapper" id="routingList">
+        <div class="empty-state" id="routingEmpty">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/></svg>
+          <h3>No routing rules</h3>
+          <p>Emails will go to default destinations (if any). Add rules for fine-grained control.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════ EMAILS SECTION ═══════ -->
+    <section class="section" id="sectionEmails">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title">Processed Emails</h2>
+          <p class="section-desc">Emails that have been fetched, classified, and had deadlines extracted.</p>
+        </div>
+        <button class="btn btn-primary" onclick="syncNow()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+          Sync Now
+        </button>
+      </div>
+
+      <div class="table-wrapper" id="emailsList">
+        <div class="empty-state" id="emailsEmpty">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+          <h3>No emails yet</h3>
+          <p>Connect a Gmail account and click <strong>Sync Now</strong> to fetch emails.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════ REMINDERS SECTION ═══════ -->
+    <section class="section" id="sectionReminders">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title">Reminders</h2>
+          <p class="section-desc">Scheduled and sent deadline reminders.</p>
+        </div>
+        <button class="btn btn-primary" onclick="sendDueNow()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+          Send Due Now
+        </button>
+      </div>
+
+      <div class="table-wrapper" id="remindersList">
+        <div class="empty-state" id="remindersEmpty">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          <h3>No reminders</h3>
+          <p>Reminders appear here once emails with deadlines are processed.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════ WHATSAPP BRIDGE SECTION ═══════ -->
+    <section class="section" id="sectionWhatsapp">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title">WhatsApp Bridge</h2>
+          <p class="section-desc">Configure the WhatsApp messaging bridge. Scan QR for web.js mode or enter Meta API credentials.</p>
+        </div>
+        <div class="wa-status-badge" id="waStatusBadge">
+          <span class="health-dot"></span>
+          <span>Checking…</span>
+        </div>
+      </div>
+
+      <!-- Mode Toggle -->
+      <div class="wa-mode-toggle">
+        <button class="wa-mode-btn active" data-wamode="webjs" id="waBtnWebjs">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+          <div>
+            <strong>whatsapp-web.js</strong>
+            <small>Unofficial · Groups · QR Scan</small>
+          </div>
+        </button>
+        <button class="wa-mode-btn" data-wamode="meta" id="waBtnMeta">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          <div>
+            <strong>Meta Cloud API</strong>
+            <small>Official · 1:1 messages</small>
+          </div>
+          <span class="tag tag-active" style="margin-left:auto;font-size:0.6rem;">OFFICIAL</span>
+        </button>
+      </div>
+
+      <!-- WebJS Panel -->
+      <div class="wa-panel" id="waPanelWebjs">
+        <div class="wa-qr-card">
+          <h3>Scan QR Code</h3>
+          <p class="section-desc">Open WhatsApp → Settings → Linked Devices → Link a Device</p>
+          <div class="wa-qr-box" id="waQrBox">
+            <div class="wa-qr-placeholder" id="waQrPlaceholder">
+              <div class="wa-qr-spinner"></div>
+              <p>Waiting for QR code…</p>
+              <p style="font-size:0.72rem;color:var(--text-muted);">The Node bridge must be running</p>
+            </div>
+            <img id="waQrImage" alt="QR Code" style="display:none;max-width:220px;border-radius:8px;">
+          </div>
+          <button class="btn btn-sm btn-ghost" onclick="fetchWaQR()" style="margin-top:12px;">Refresh QR</button>
+        </div>
+      </div>
+
+      <!-- Meta Panel -->
+      <div class="wa-panel" id="waPanelMeta" style="display:none;">
+        <div class="wa-meta-card">
+          <h3>Meta Cloud API Credentials</h3>
+          <p class="section-desc" style="margin-bottom:18px;">Get these from <a href="https://developers.facebook.com/" target="_blank">Meta Developer Portal</a> → Your App → WhatsApp → API Setup.</p>
+          <form id="waMetaForm" autocomplete="off">
+            <div class="form-group">
+              <label>Phone Number ID</label>
+              <input class="form-input" id="waPhoneNumberId" placeholder="e.g. 107654321098765" required>
+            </div>
+            <div class="form-group">
+              <label>Business Access Token</label>
+              <input class="form-input" id="waBusinessToken" type="password" placeholder="EAAx..." required>
+            </div>
+            <div class="form-group">
+              <label>Webhook Verify Token <span style="color:var(--text-muted);font-weight:400;text-transform:none;">(optional)</span></label>
+              <input class="form-input" id="waVerifyToken" placeholder="your-webhook-verify-token">
+            </div>
+            <div style="display:flex;gap:10px;margin-top:20px;">
+              <button type="submit" class="btn btn-primary">Save & Connect</button>
+              <button type="button" class="btn btn-ghost" onclick="testWaMeta()">Test Connection</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- Test Message -->
+      <div class="wa-test-card" style="margin-top:20px;">
+        <h3>Send Test Message</h3>
+        <div class="form-group" style="margin-top:12px;">
+          <label id="waRecipientLabel">Group ID</label>
+          <input class="form-input" id="waTestRecipient" placeholder="e.g. 120363012345678901@g.us">
+        </div>
+        <div class="form-group">
+          <label>Message</label>
+          <textarea class="form-input" id="waTestMessage" rows="2" style="resize:vertical;">Hello from WhatsApp Bridge! 🚀</textarea>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="sendWaTest()">Send Test</button>
+      </div>
+    </section>
+  </main>
+
+  <!-- Modal overlay -->
+  <div class="modal-overlay" id="modalOverlay">
+    <div class="modal" id="modal">
+      <div class="modal-header">
+        <h3 class="modal-title" id="modalTitle">Dialog</h3>
+        <button class="modal-close" onclick="closeModal()">×</button>
+      </div>
+      <div class="modal-body" id="modalBody"></div>
+    </div>
+  </div>
+
+  <!-- Toast container -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script src="/static/js/dashboard.js"></script>
+</body>
+</html>
