@@ -107,6 +107,12 @@ def stop_whatsapp_bridge():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    import asyncio
+    from app.websocket import set_main_event_loop
+    try:
+        set_main_event_loop(asyncio.get_running_loop())
+    except Exception:
+        pass
     logger.info("Starting up Gmail Reminder System")
     init_db()
     start_whatsapp_bridge()

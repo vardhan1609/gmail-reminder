@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Sliders, CheckCircle2, AlertCircle, Save } from "lucide-react";
+import { Sliders, CheckCircle2, AlertCircle, Save, Sun } from "lucide-react";
 import { Header } from "@/components/layout/header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { api, NotificationPreferences } from "@/lib/api";
 
 export default function SettingsPage() {
@@ -53,24 +54,48 @@ export default function SettingsPage() {
   return (
     <div className="flex-1 flex flex-col">
       <Header
-        title="Notification Rules & Settings"
-        description="Configure delivery frequency, privacy safeguards, and reminder timing."
+        title="Settings & Appearance"
+        description="Configure theme, delivery frequency, privacy safeguards, and reminder timing."
       />
 
       <main className="flex-1 p-8 space-y-6 max-w-4xl mx-auto w-full">
         {error && (
-          <div className="flex items-center gap-2 p-4 text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl">
+          <div className="flex items-center gap-2 p-4 text-sm text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/50 rounded-xl">
             <AlertCircle className="h-5 w-5 shrink-0" />
             <span>{error}</span>
           </div>
         )}
 
         {successMsg && (
-          <div className="flex items-center gap-2 p-4 text-sm text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-xl">
+          <div className="flex items-center gap-2 p-4 text-sm text-emerald-800 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900/50 rounded-xl">
             <CheckCircle2 className="h-5 w-5 shrink-0" />
             <span>{successMsg}</span>
           </div>
         )}
+
+        {/* Appearance & Theme Section */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Sun className="h-5 w-5 text-indigo-500" />
+              Appearance & Theme
+            </CardTitle>
+            <CardDescription>
+              Choose your interface color scheme. Select Light, Dark, or automatically match your operating system theme.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl border border-border bg-slate-50/60 dark:bg-slate-900/50">
+              <div>
+                <p className="text-sm font-semibold text-foreground">Theme Mode</p>
+                <p className="text-xs text-muted-foreground">
+                  Changes apply immediately across the entire dashboard and auth screens.
+                </p>
+              </div>
+              <ThemeToggle variant="segmented" showLabel={true} />
+            </div>
+          </CardContent>
+        </Card>
 
         {loading ? (
           <Card>
@@ -93,7 +118,7 @@ export default function SettingsPage() {
               <CardContent className="space-y-6">
                 {/* Notification Mode Radio */}
                 <div className="space-y-3">
-                  <label className="text-sm font-semibold text-slate-800">Alert Mode</label>
+                  <label className="text-sm font-semibold text-foreground">Alert Mode</label>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     {[
                       {
@@ -122,12 +147,12 @@ export default function SettingsPage() {
                         }
                         className={`p-4 rounded-xl border cursor-pointer transition-all ${
                           prefs.notification_mode === mode.value
-                            ? "border-blue-600 bg-blue-50/50 shadow-sm"
-                            : "border-slate-200 hover:border-slate-300"
+                            ? "border-blue-600 dark:border-blue-500 bg-blue-50/60 dark:bg-blue-950/40 shadow-sm"
+                            : "border-border hover:border-slate-300 dark:hover:border-slate-700 bg-card"
                         }`}
                       >
-                        <p className="font-semibold text-sm text-slate-900">{mode.label}</p>
-                        <p className="text-xs text-slate-500 mt-1">{mode.desc}</p>
+                        <p className="font-semibold text-sm text-foreground">{mode.label}</p>
+                        <p className="text-xs text-muted-foreground mt-1">{mode.desc}</p>
                       </div>
                     ))}
                   </div>
@@ -136,7 +161,7 @@ export default function SettingsPage() {
                 {/* Digest Interval */}
                 {prefs.notification_mode === "summary" && (
                   <div className="space-y-1">
-                    <label className="text-xs font-semibold text-slate-700">
+                    <label className="text-xs font-semibold text-foreground">
                       Digest Interval (Minutes)
                     </label>
                     <Input
@@ -152,7 +177,7 @@ export default function SettingsPage() {
                       }
                       className="max-w-xs text-xs"
                     />
-                    <p className="text-[11px] text-slate-500">
+                    <p className="text-[11px] text-muted-foreground">
                       Minimum 5 minutes, default 60 minutes.
                     </p>
                   </div>
@@ -160,7 +185,7 @@ export default function SettingsPage() {
 
                 {/* Notification Cutoff */}
                 <div className="space-y-1">
-                  <label className="text-xs font-semibold text-slate-700">
+                  <label className="text-xs font-semibold text-foreground">
                     Safe Notification Cutoff (Hours)
                   </label>
                   <Input
@@ -176,14 +201,14 @@ export default function SettingsPage() {
                     }
                     className="max-w-xs text-xs"
                   />
-                  <p className="text-[11px] text-slate-500">
+                  <p className="text-[11px] text-muted-foreground">
                     Emails received older than this threshold will be synchronized into the database but will NOT trigger notification alerts, preventing spam storms during initial imports.
                   </p>
                 </div>
 
                 {/* Reminder Offsets */}
                 <div className="space-y-1">
-                  <label className="text-xs font-semibold text-slate-700">
+                  <label className="text-xs font-semibold text-foreground">
                     Reminder Offsets (Minutes Before Deadline)
                   </label>
                   <Input
@@ -197,16 +222,16 @@ export default function SettingsPage() {
                     }
                     className="max-w-xs text-xs font-mono"
                   />
-                  <p className="text-[11px] text-slate-500">
+                  <p className="text-[11px] text-muted-foreground">
                     Comma-separated list in minutes. For example: <code>1440,360,60</code> triggers reminders 24h, 6h, and 1h prior to deadline.
                   </p>
                 </div>
 
                 {/* Privacy Mode Toggle */}
-                <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
+                <div className="pt-4 border-t border-border flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-semibold text-slate-900">Privacy Mode</p>
-                    <p className="text-xs text-slate-500">
+                    <p className="text-sm font-semibold text-foreground">Privacy Mode</p>
+                    <p className="text-xs text-muted-foreground">
                       Redact email bodies and show only sender, subject, and direct Gmail link. Recommended for public group chats.
                     </p>
                   </div>
@@ -236,4 +261,3 @@ export default function SettingsPage() {
     </div>
   );
 }
-

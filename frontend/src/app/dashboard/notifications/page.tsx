@@ -49,13 +49,13 @@ export default function NotificationsPage() {
 
       <main className="flex-1 p-8 space-y-6 max-w-7xl mx-auto w-full">
         {/* Filters */}
-        <div className="flex flex-wrap gap-4 items-center justify-between bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+        <div className="flex flex-wrap gap-4 items-center justify-between bg-card p-4 rounded-xl border border-border shadow-sm">
           <div className="flex items-center gap-3">
-            <span className="text-xs font-semibold text-slate-700">Channel:</span>
+            <span className="text-xs font-semibold text-foreground">Channel:</span>
             <select
               value={channelFilter}
               onChange={(e) => setChannelFilter(e.target.value)}
-              className="text-xs border border-slate-200 rounded-md px-3 py-1.5 bg-white text-slate-700 focus:outline-none"
+              className="text-xs border border-input rounded-md px-3 py-1.5 bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
             >
               <option value="all">All Channels</option>
               <option value="telegram">Telegram</option>
@@ -64,11 +64,11 @@ export default function NotificationsPage() {
           </div>
 
           <div className="flex items-center gap-3">
-            <span className="text-xs font-semibold text-slate-700">Status:</span>
+            <span className="text-xs font-semibold text-foreground">Status:</span>
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="text-xs border border-slate-200 rounded-md px-3 py-1.5 bg-white text-slate-700 focus:outline-none"
+              className="text-xs border border-input rounded-md px-3 py-1.5 bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
             >
               <option value="all">All Statuses</option>
               <option value="sent">Sent</option>
@@ -109,7 +109,7 @@ export default function NotificationsPage() {
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm">
-                  <thead className="bg-slate-50 text-slate-600 font-medium text-xs border-b border-slate-200">
+                  <thead className="bg-slate-50 dark:bg-slate-900/60 text-muted-foreground font-medium text-xs border-b border-border">
                     <tr>
                       <th className="py-3 px-6">Channel</th>
                       <th className="py-3 px-4">Destination ID</th>
@@ -120,16 +120,16 @@ export default function NotificationsPage() {
                       <th className="py-3 px-6 text-right">Details</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100">
+                  <tbody className="divide-y divide-border">
                     {deliveries.map((d) => (
-                      <tr key={d.id} className="hover:bg-slate-50 transition-colors">
-                        <td className="py-3.5 px-6 font-semibold capitalize text-slate-900 text-xs">
+                      <tr key={d.id} className="hover:bg-muted/50 transition-colors">
+                        <td className="py-3.5 px-6 font-semibold capitalize text-foreground text-xs">
                           {d.channel}
                         </td>
-                        <td className="py-3.5 px-4 font-mono text-xs text-slate-600">
+                        <td className="py-3.5 px-4 font-mono text-xs text-muted-foreground">
                           {d.destination_id}
                         </td>
-                        <td className="py-3.5 px-4 text-xs capitalize text-slate-700">
+                        <td className="py-3.5 px-4 text-xs capitalize text-muted-foreground">
                           {d.notification_type}
                         </td>
                         <td className="py-3.5 px-4">

@@ -79,6 +79,7 @@ class NotificationPreferencesUpdate(BaseModel):
     notification_cutoff_hours: Optional[int] = Field(None, ge=1, le=168)
     reminder_offsets_min: Optional[str] = None
     included_categories: Optional[str] = None
+    theme_preference: Optional[str] = Field(None, description="'light', 'dark', or 'system'")
 
 
 class NotificationPreferencesResponse(BaseModel):
@@ -88,6 +89,7 @@ class NotificationPreferencesResponse(BaseModel):
     notification_cutoff_hours: int
     reminder_offsets_min: str
     included_categories: str
+    theme_preference: str = "system"
 
     class Config:
         from_attributes = True
@@ -464,6 +466,14 @@ def update_notification_preferences(
 
     if req.included_categories is not None:
         prefs.included_categories = req.included_categories
+
+    if req.theme_preference is not None:
+        if req.theme_preference not in ("light", "dark", "system"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid theme preference. Must be 'light', 'dark', or 'system'.",
+            )
+        prefs.theme_preference = req.theme_preference
 
     db.commit()
     db.refresh(prefs)

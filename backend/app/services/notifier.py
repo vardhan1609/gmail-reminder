@@ -16,6 +16,7 @@ from app.models.notification_delivery import DeliveryChannel, NotificationType, 
 from app.services.telegram import send_group_message as send_tg, bot_is_ready as tg_ready
 from app.services.whatsapp import send_group_message as send_wa, bridge_is_ready as wa_ready
 from app.utils.logger import get_logger
+from app.websocket import publish_event, EventType
 
 logger = get_logger(__name__)
 
@@ -190,6 +191,18 @@ def deliver_notification_idempotent(
         logger.info("Skipping notification with key %s: already delivered", idempotency_key)
         return True, None
 
+    if user_id:
+        publish_event(
+            user_id,
+            EventType.NOTIFICATION_QUEUED,
+            {
+                "notification_id": idempotency_key,
+                "email_id": email_id,
+                "channel": channel,
+                "notification_type": notification_type,
+            },
+        )
+
     success, error_msg = send_to_channel(channel, destination_id, message)
 
     status = DeliveryStatus.sent.value if success else DeliveryStatus.failed.value
@@ -222,6 +235,30 @@ def deliver_notification_idempotent(
         )
     else:
         db.notification_deliveries.insert_one(delivery_doc)
+
+    if user_id:
+        if success:
+            publish_event(
+                user_id,
+                EventType.NOTIFICATION_SENT,
+                {
+                    "notification_id": idempotency_key,
+                    "email_id": email_id,
+                    "channel": channel,
+                    "sent_at": sent_at.isoformat() if sent_at else datetime.now(timezone.utc).isoformat(),
+                },
+            )
+        else:
+            publish_event(
+                user_id,
+                EventType.NOTIFICATION_FAILED,
+                {
+                    "notification_id": idempotency_key,
+                    "email_id": email_id,
+                    "channel": channel,
+                    "error": error_msg or "Delivery failed",
+                },
+            )
 
     return success, error_msg
 

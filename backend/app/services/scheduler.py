@@ -35,6 +35,7 @@ from app.services.notifier import (
 from app.services.parser import parse_email
 from app.services.routing import resolve_destinations
 from app.utils.logger import get_logger
+from app.websocket import publish_event, EventType
 
 logger = get_logger(__name__)
 
@@ -119,6 +120,12 @@ def _poll_all_accounts(db):
             continue
 
         logger.info("Synchronizing account: %s", email_addr)
+        if user_id:
+            publish_event(
+                user_id,
+                EventType.GMAIL_SYNC_STARTED,
+                {"account_id": acc_id, "email": email_addr, "started_at": datetime.now(timezone.utc).isoformat()},
+            )
 
         try:
             # Check or load SyncState
@@ -165,6 +172,18 @@ def _poll_all_accounts(db):
                     }}
                 )
 
+            if user_id:
+                publish_event(
+                    user_id,
+                    EventType.GMAIL_SYNC_COMPLETED,
+                    {
+                        "account_id": acc_id,
+                        "email": email_addr,
+                        "new_messages_count": len(msg_ids),
+                        "completed_at": now.isoformat(),
+                    },
+                )
+
         except Exception as exc:
             logger.error("Failed to sync account %s: %s", email_addr, exc)
             db.sync_states.update_one(
@@ -176,6 +195,17 @@ def _poll_all_accounts(db):
                 db.gmail_connections.update_one(
                     {"email": email_addr},
                     {"$set": {"last_sync_status": f"failed: {str(exc)[:100]}"}},
+                )
+            if user_id:
+                publish_event(
+                    user_id,
+                    EventType.GMAIL_SYNC_FAILED,
+                    {
+                        "account_id": acc_id,
+                        "email": email_addr,
+                        "error": str(exc)[:100],
+                        "failed_at": datetime.now(timezone.utc).isoformat(),
+                    },
                 )
 
 
@@ -253,6 +283,31 @@ def _process_email(db, account_id: str, raw_email: Dict[str, Any], user_id: Opti
     email_id = str(inserted.get("id") or inserted.get("_id"))
     logger.info("Processed email '%s' [%s] -> ID: %s", subject, category, email_id)
 
+    if user_id:
+        received_iso = received_at.isoformat() if hasattr(received_at, "isoformat") else str(received_at)
+        publish_event(
+            user_id,
+            EventType.EMAIL_RECEIVED,
+            {
+                "email_id": email_id,
+                "subject": subject,
+                "sender": sender,
+                "category": category,
+                "received_at": received_iso,
+                "has_deadline": bool(deadline),
+            },
+        )
+        publish_event(
+            user_id,
+            EventType.EMAIL_CLASSIFIED,
+            {
+                "email_id": email_id,
+                "category": category,
+                "confidence_score": confidence,
+                "extracted_deadline": deadline.isoformat() if deadline else None,
+            },
+        )
+
     # 7. Check if historical cutoff prevents notification storm
     is_historical = False
     if settings.notification_cutoff_hours > 0 and received_at:
@@ -318,7 +373,7 @@ def _process_email(db, account_id: str, raw_email: Dict[str, Any], user_id: Opti
                     f"🔗 [Open Email](https://mail.google.com/mail/u/0/#inbox/{gmail_id})"
                 )
 
-                db.reminders.insert_one({
+                rem_doc = {
                     "email_id": email_id,
                     "user_id": user_id,
                     "destination_id": dest_id,
@@ -327,8 +382,23 @@ def _process_email(db, account_id: str, raw_email: Dict[str, Any], user_id: Opti
                     "status": ReminderStatus.pending.value,
                     "retry_count": 0,
                     "created_at": datetime.now(timezone.utc),
-                })
+                }
+                inserted_rem = db.reminders.insert_one(rem_doc)
+                rem_id = str(inserted_rem.get("id") or inserted_rem.get("_id") or "")
                 logger.info("Scheduled reminder for '%s' at %s", subject, scheduled_time)
+
+                if user_id:
+                    publish_event(
+                        user_id,
+                        EventType.REMINDER_CREATED,
+                        {
+                            "reminder_id": rem_id,
+                            "email_id": email_id,
+                            "scheduled_at": scheduled_time.isoformat(),
+                            "message_preview": subject,
+                            "status": "pending",
+                        },
+                    )
 
         # Calendar synchronization
         try:
@@ -406,14 +476,23 @@ def dispatch_due_reminders(db) -> int:
         message = r.get("message", "")
         idempotency_key = f"reminder_{r_id}_{channel}_{r.get('retry_count', 0)}"
 
-        success, err = deliver_notification_idempotent(
-            email_id=r.get("email_id"),
-            channel=channel,
-            destination_id=target_id,
-            notification_type="reminder",
-            message=message,
-            idempotency_key=idempotency_key,
-        )
+        user_id = r.get("user_id")
+        deliver_kwargs = {
+            "email_id": r.get("email_id"),
+            "channel": channel,
+            "destination_id": target_id,
+            "notification_type": "reminder",
+            "message": message,
+            "idempotency_key": idempotency_key,
+        }
+        try:
+            import inspect
+            sig = inspect.signature(deliver_notification_idempotent)
+            if "user_id" in sig.parameters:
+                deliver_kwargs["user_id"] = user_id
+        except Exception:
+            pass
+        success, err = deliver_notification_idempotent(**deliver_kwargs)
 
         if success:
             db.reminders.update_one(
@@ -425,6 +504,17 @@ def dispatch_due_reminders(db) -> int:
                 }}
             )
             sent_count += 1
+            if user_id:
+                publish_event(
+                    user_id,
+                    EventType.REMINDER_UPDATED,
+                    {
+                        "reminder_id": r_id,
+                        "email_id": r.get("email_id"),
+                        "status": ReminderStatus.sent.value,
+                        "retry_count": r.get("retry_count", 0),
+                    },
+                )
         else:
             retry_count = r.get("retry_count", 0) + 1
             # Exponential backoff delay: 1 min, 2 min, 4 min, etc.
@@ -441,5 +531,17 @@ def dispatch_due_reminders(db) -> int:
                     "last_error": err,
                 }}
             )
+            if user_id:
+                publish_event(
+                    user_id,
+                    EventType.REMINDER_UPDATED,
+                    {
+                        "reminder_id": r_id,
+                        "email_id": r.get("email_id"),
+                        "status": new_status,
+                        "retry_count": retry_count,
+                        "last_error": err,
+                    },
+                )
 
     return sent_count

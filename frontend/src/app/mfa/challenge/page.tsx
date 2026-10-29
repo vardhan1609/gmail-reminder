@@ -34,8 +34,8 @@ export default function MFAChallengePage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-slate-50">
-      <Card className="w-full max-w-md shadow-md border-slate-200">
+    <div className="min-h-screen flex items-center justify-center p-4 bg-background">
+      <Card className="w-full max-w-md shadow-md border-border">
         <CardHeader className="text-center pb-4">
           <div className="mx-auto h-12 w-12 rounded-xl bg-blue-600 flex items-center justify-center text-white mb-3 shadow">
             <ShieldCheck className="h-6 w-6" />

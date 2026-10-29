@@ -10,6 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ConfirmDialog } from "@/components/ui/dialog";
 import { api, ReminderRecord } from "@/lib/api";
 import { formatDate, formatDualDate } from "@/lib/utils";
+import { useRealtime } from "@/components/providers/realtime-provider";
 
 export default function RemindersPage() {
   const [reminders, setReminders] = useState<ReminderRecord[]>([]);
@@ -42,9 +43,53 @@ export default function RemindersPage() {
     }
   };
 
+  const { subscribe } = useRealtime();
+
   useEffect(() => {
     fetchReminders();
   }, [statusFilter]);
+
+  useEffect(() => {
+    const unsubReminder = subscribe("reminder.created", (data: any) => {
+      setReminders((prev) => {
+        if (prev.some((r) => r.id === data.reminder_id)) return prev;
+        const newRem: ReminderRecord = {
+          id: data.reminder_id,
+          email_id: data.email_id,
+          destination_id: "",
+          message: data.message_preview || "Deadline Reminder",
+          scheduled_at: data.scheduled_at,
+          status: "pending",
+          retry_count: 0,
+          last_error: null,
+          sent_at: null,
+          created_at: new Date().toISOString(),
+        };
+        return [newRem, ...prev];
+      });
+      setTotal((t) => t + 1);
+    });
+
+    const unsubReminderUpd = subscribe("reminder.updated", (data: any) => {
+      setReminders((prev) =>
+        prev.map((r) =>
+          r.id === data.reminder_id
+            ? {
+                ...r,
+                status: data.status,
+                retry_count: data.retry_count ?? r.retry_count,
+                last_error: data.last_error ?? r.last_error,
+              }
+            : r
+        )
+      );
+    });
+
+    return () => {
+      unsubReminder();
+      unsubReminderUpd();
+    };
+  }, [subscribe]);
 
   const handleResend = async () => {
     if (!resendingId) return;
@@ -71,15 +116,15 @@ export default function RemindersPage() {
 
       <main className="flex-1 p-8 space-y-6 max-w-7xl mx-auto w-full">
         {/* Status Filter Tabs */}
-        <div className="flex gap-2 p-1 bg-slate-200/60 rounded-lg w-fit text-xs font-semibold">
+        <div className="flex gap-2 p-1 bg-muted/70 rounded-lg w-fit text-xs font-semibold">
           {["all", "pending", "sent", "failed"].map((st) => (
             <button
               key={st}
               onClick={() => setStatusFilter(st)}
               className={`px-3 py-1.5 rounded-md capitalize transition-colors ${
                 statusFilter === st
-                  ? "bg-white text-slate-900 shadow-sm"
-                  : "text-slate-600 hover:text-slate-900"
+                  ? "bg-card text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
               }`}
             >
               {st}
@@ -88,21 +133,21 @@ export default function RemindersPage() {
         </div>
 
         {error && (
-          <div className="flex items-center gap-2 p-4 text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl">
+          <div className="flex items-center gap-2 p-4 text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-xl">
             <AlertCircle className="h-5 w-5 shrink-0" />
             <span>{error}</span>
           </div>
         )}
 
         {actionMessage && (
-          <div className="flex items-center gap-2 p-4 text-sm text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-xl">
+          <div className="flex items-center gap-2 p-4 text-sm text-emerald-800 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900/50 rounded-xl">
             <CheckCircle2 className="h-5 w-5 shrink-0" />
             <span>{actionMessage}</span>
           </div>
         )}
 
         <Card>
-          <CardHeader className="py-4 px-6 border-b border-slate-100 flex flex-row items-center justify-between">
+          <CardHeader className="py-4 px-6 border-b border-border flex flex-row items-center justify-between">
             <CardTitle className="text-base font-semibold">
               Reminder Schedule ({total})
             </CardTitle>
@@ -116,17 +161,17 @@ export default function RemindersPage() {
                 <Skeleton className="h-10 w-full" />
               </div>
             ) : reminders.length === 0 ? (
-              <div className="text-center py-16 text-slate-500">
+              <div className="text-center py-16 text-muted-foreground">
                 <Clock className="h-10 w-10 mx-auto mb-3 opacity-30" />
                 <p className="text-base font-medium">No reminders found.</p>
-                <p className="text-xs text-slate-400 mt-1">
+                <p className="text-xs text-muted-foreground mt-1">
                   Emails containing detected deadlines will schedule reminders here.
                 </p>
               </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm">
-                  <thead className="bg-slate-50 text-slate-600 font-medium text-xs border-b border-slate-200">
+                  <thead className="bg-slate-50 dark:bg-slate-900/60 text-muted-foreground font-medium text-xs border-b border-border">
                     <tr>
                       <th className="py-3 px-6">Message Preview</th>
                       <th className="py-3 px-4">Scheduled For</th>
@@ -136,17 +181,17 @@ export default function RemindersPage() {
                       <th className="py-3 px-6 text-right">Actions</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100">
+                  <tbody className="divide-y divide-border">
                     {reminders.map((r) => (
-                      <tr key={r.id} className="hover:bg-slate-50 transition-colors">
-                        <td className="py-3.5 px-6 font-medium text-slate-900 max-w-sm truncate">
+                      <tr key={r.id} className="hover:bg-muted/50 transition-colors">
+                        <td className="py-3.5 px-6 font-medium text-foreground max-w-sm truncate">
                           {r.message.split("\n")[0].replace(/[⏰*]/g, "").trim()}
                         </td>
                         <td className="py-3.5 px-4 text-xs">
-                          <span className="font-semibold text-slate-700 block">
+                          <span className="font-semibold text-foreground block">
                             {formatDualDate(r.scheduled_at)?.local || formatDate(r.scheduled_at)}
                           </span>
-                          <span className="text-[10px] text-slate-400 font-mono block">
+                          <span className="text-[10px] text-muted-foreground font-mono block">
                             {formatDualDate(r.scheduled_at)?.utcTime || ""}
                           </span>
                         </td>

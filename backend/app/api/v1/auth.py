@@ -142,6 +142,7 @@ def register(req: RegisterRequest, db: Session = Depends(get_db_session)):
         notification_cutoff_hours=24,
         reminder_offsets_min="1440,360,60",
         included_categories="All",
+        theme_preference="system",
     )
     db.add(prefs)
     db.commit()
