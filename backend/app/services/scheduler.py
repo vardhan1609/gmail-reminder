@@ -1,17 +1,38 @@
-from datetime import datetime, timedelta
+"""
+Background worker and scheduler:
+- Continuous polling of connected Gmail accounts
+- Incremental history sync with fallback
+- Normalization, HTML sanitization, and deduplication
+- Category classification and deadline extraction with confidence scoring
+- Immediate notifications vs summary digest notifications
+- Reminder creation with configurable offsets
+- Due reminder dispatch with exponential backoff and retry handling
+- Channel independence and worker restart recovery
+"""
+from datetime import datetime, timezone, timedelta
 import threading
 import time
+from typing import Dict, List, Optional, Any
 from bson import ObjectId
-from pymongo.database import Database
 
 from app.config import settings
 from app.database.db import get_db
 from app.models.reminder import ReminderStatus
+from app.models.notification_delivery import DeliveryStatus
 from app.services.calendar_sync import sync_email_deadline
 from app.services.classifier import classify_email
-from app.services.deadline_extractor import extract_deadline
-from app.services.gmail_service import list_new_message_ids, get_message
-from app.services.notifier import send_notification
+from app.services.deadline_extractor import get_deadline_extraction
+from app.services.gmail_service import (
+    sync_messages_incremental,
+    get_message,
+    list_messages_paginated,
+)
+from app.services.notifier import (
+    deliver_notification_idempotent,
+    format_email_notification,
+    format_digest_summary,
+)
+from app.services.parser import parse_email
 from app.services.routing import resolve_destinations
 from app.utils.logger import get_logger
 
@@ -19,18 +40,21 @@ logger = get_logger(__name__)
 
 _scheduler_thread: threading.Thread | None = None
 _shutdown_event = threading.Event()
+_digest_buffer: List[Dict[str, Any]] = []
+_last_digest_time = datetime.now(timezone.utc)
 
 
 def start_scheduler():
     global _scheduler_thread, _shutdown_event
-    if _scheduler_thread is not None:
+    if _scheduler_thread is not None and _scheduler_thread.is_alive():
         return
     _shutdown_event.clear()
-    _scheduler_thread = threading.Thread(target=_run_scheduler, daemon=True)
+    _scheduler_thread = threading.Thread(target=_run_scheduler, daemon=True, name="SchedulerWorker")
     _scheduler_thread.start()
     logger.info(
-        "Scheduler started: polling all accounts every %ds, dispatching reminders every 60s",
+        "Scheduler worker started: poll interval %ds, notification mode '%s'",
         settings.poll_interval_seconds,
+        settings.notification_mode,
     )
 
 
@@ -39,173 +63,283 @@ def stop_scheduler():
     if _scheduler_thread is None:
         return
     _shutdown_event.set()
-    _scheduler_thread.join()
+    _scheduler_thread.join(timeout=10.0)
     _scheduler_thread = None
-    logger.info("Scheduler stopped")
+    logger.info("Scheduler worker stopped cleanly")
 
 
 def _run_scheduler():
     db = get_db()
-    last_poll_time = datetime.min
+    last_poll_time = datetime.min.replace(tzinfo=timezone.utc)
 
     while not _shutdown_event.is_set():
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
-        # 1. Poll accounts
+        # 1. Email synchronization cycle
         if (now - last_poll_time).total_seconds() >= settings.poll_interval_seconds:
             try:
                 _poll_all_accounts(db)
                 last_poll_time = now
             except Exception as exc:
-                logger.error("Poll cycle failed: %s", exc)
+                logger.error("Poll cycle encountered an error: %s", exc)
 
-        # 2. Dispatch reminders
+        # 2. Summary digest dispatch if applicable
+        if settings.notification_mode == "summary":
+            _check_and_dispatch_digest(db)
+
+        # 3. Dispatch scheduled reminders
         try:
             dispatch_due_reminders(db)
         except Exception as exc:
-            logger.error("Dispatch cycle failed: %s", exc)
+            logger.error("Reminder dispatch cycle failed: %s", exc)
 
-        # Sleep in small steps to shutdown quickly
-        for _ in range(30):
+        # Quick interruptible sleep
+        for _ in range(15):
             if _shutdown_event.is_set():
                 break
             time.sleep(2)
 
 
-def _poll_all_accounts(db: Database):
+def _poll_all_accounts(db):
     accounts = list(db.accounts.find({"active": True}))
+    if hasattr(db, "gmail_connections"):
+        accounts += list(db.gmail_connections.find({"active": True}))
     if not accounts:
-        logger.warning("No active Gmail accounts connected; visit /accounts/gmail/login.")
+        logger.info("No active Gmail accounts to poll.")
         return
 
     for account in accounts:
-        account_id_str = str(account["_id"])
-        logger.info("Polling account: %s", account["email"])
+        acc_id = str(account.get("id") or account.get("_id"))
+        email_addr = account.get("email", "")
+        token_path = account.get("token_path", "")
+        user_id = account.get("user_id")
+        logger.info("Synchronizing account: %s", email_addr)
+
         try:
-            token_path = account["token_path"]
-            message_ids = list_new_message_ids(token_path)
-            for msg_id in message_ids:
-                msg = get_message(token_path, msg_id)
-                body = msg.get("plain_text") or msg.get("snippet") or ""
-                raw_email = {
-                    "gmail_id": msg["gmail_id"],
-                    "sender": msg["sender"],
-                    "subject": msg["subject"],
-                    "body": body,
-                }
-                _process_email(db, account_id_str, raw_email)
+            # Check or load SyncState
+            sync_state = db.sync_states.find_one({"account_identifier": email_addr})
+            last_history_id = sync_state.get("history_id") if sync_state else None
+
+            # Fetch new messages
+            msg_ids, new_history_id = sync_messages_incremental(token_path, last_history_id)
+            logger.info("Found %d new message IDs for %s", len(msg_ids), email_addr)
+
+            for msg_id in msg_ids:
+                if _shutdown_event.is_set():
+                    break
+                raw_msg = get_message(token_path, msg_id)
+                if raw_msg:
+                    _process_email(db, acc_id, raw_msg, user_id=user_id)
+
+            # Update SyncState
+            now = datetime.now(timezone.utc)
+            if sync_state:
+                db.sync_states.update_one(
+                    {"account_identifier": email_addr},
+                    {"$set": {
+                        "history_id": new_history_id,
+                        "last_successful_sync": now,
+                        "last_sync_status": "success",
+                    }}
+                )
+            else:
+                db.sync_states.insert_one({
+                    "account_identifier": email_addr,
+                    "history_id": new_history_id,
+                    "last_successful_sync": now,
+                    "last_sync_status": "success",
+                })
+
         except Exception as exc:
-            logger.error("Failed to poll account %s: %s", account["email"], exc)
-
-
-def _process_email(db: Database, account_id: str, raw_email: dict):
-    # Unique constraint check
-    gmail_id = raw_email["gmail_id"]
-    if db.emails.find_one({"account_id": account_id, "gmail_id": gmail_id}):
-        return  # already processed
-
-    # Classification & extraction
-    subject = raw_email["subject"]
-    body = raw_email.get("body", "")
-    sender = raw_email["sender"]
-
-    # Calculate dedup key
-    normalized_subject = subject.lower().replace("re:", "").replace("fwd:", "").strip()
-    dedup_key = f"{sender.lower()}|{normalized_subject}"
-
-    # Check for recent duplicate within 24h
-    time_limit = datetime.utcnow() - timedelta(hours=24)
-    duplicate = db.emails.find_one({
-        "account_id": account_id,
-        "dedup_key": dedup_key,
-        "created_at": {"$gte": time_limit}
-    })
-    if duplicate:
-        logger.info("Skipping email %r: duplicate of %s", subject, duplicate["_id"])
-        return
-
-    # Extract deadline and classify
-    category = classify_email(subject, body)
-    deadline = extract_deadline(subject, body)
-
-    # Insert email
-    email_doc = {
-        "account_id": account_id,
-        "gmail_id": gmail_id,
-        "sender": sender,
-        "subject": subject,
-        "body": body,
-        "category": category,
-        "deadline": deadline,
-        "dedup_key": dedup_key,
-        "processed": False,
-        "created_at": datetime.utcnow()
-    }
-    db.emails.insert_one(email_doc)
-    email_id_str = str(email_doc["_id"])
-
-    logger.info(
-        "Email parsed: %r [Category: %s, Deadline: %s]",
-        subject, category, deadline
-    )
-
-    if not deadline:
-        db.emails.update_one({"_id": ObjectId(email_id_str)}, {"$set": {"processed": True}})
-        return
-
-    # Routing & reminders creation
-    destinations = resolve_destinations(db, account_id, category)
-    if not destinations:
-        logger.warning("No destinations resolved for email %s", email_id_str)
-        db.emails.update_one({"_id": ObjectId(email_id_str)}, {"$set": {"processed": True}})
-        return
-
-    # Create reminders based on offsets
-    offsets = settings.reminder_offsets_minutes
-    reminders_created = 0
-    for dest in destinations:
-        dest_id_str = str(dest["_id"])
-        for offset in offsets:
-            reminder_time = deadline - timedelta(minutes=offset)
-            if reminder_time <= datetime.utcnow():
-                continue  # past due
-
-            # Create message template
-            message = (
-                f"🚨 *{category} Deadline Reminder*\n\n"
-                f"*Subject:* {subject}\n"
-                f"*From:* {sender}\n"
-                f"*Deadline:* {deadline.strftime('%Y-%m-%d %I:%M %p')} UTC\n"
-                f"🕒 *Due in:* {offset // 60} hours"
+            logger.error("Failed to sync account %s: %s", email_addr, exc)
+            db.sync_states.update_one(
+                {"account_identifier": email_addr},
+                {"$set": {"last_sync_status": f"failed: {str(exc)[:100]}"}},
+                upsert=True,
             )
 
-            reminder_doc = {
-                "email_id": email_id_str,
-                "destination_id": dest_id_str,
-                "message": message,
-                "reminder_time": reminder_time,
-                "status": ReminderStatus.pending.value,
-                "retries": 0,
-                "created_at": datetime.utcnow()
-            }
-            db.reminders.insert_one(reminder_doc)
-            reminders_created += 1
 
-    # Calendar synchronization
-    sync_email_deadline(db, email_doc)
+def _process_email(db, account_id: str, raw_email: Dict[str, Any], user_id: Optional[str] = None):
+    gmail_id = raw_email.get("gmail_message_id") or raw_email.get("gmail_id")
+    if not gmail_id:
+        return
 
-    db.emails.update_one(
-        {"_id": ObjectId(email_id_str)},
-        {"$set": {"processed": True}}
-    )
-    logger.info("Created %d reminders for email %s", reminders_created, email_id_str)
+    # 1. Dedup check: Unique gmail_message_id
+    existing = db.emails.find_one({"gmail_message_id": gmail_id})
+    if existing:
+        return
+
+    # 2. Parse and sanitize email body
+    parsed = parse_email(raw_email)
+    body_text = parsed.get("body_text", "")
+    html_body = parsed.get("html", "")
+    subject = parsed.get("subject", "(no subject)")
+    sender = parsed.get("sender", "unknown")
+    recipients = parsed.get("recipients", "")
+    received_at = parsed.get("received_at") or datetime.now(timezone.utc)
+    thread_id = parsed.get("gmail_thread_id")
+    labels = parsed.get("labels", [])
+    attachments = parsed.get("attachments", [])
+
+    # 3. Soft deduplication check (24h window for duplicate subject + sender)
+    norm_subject = subject.lower().replace("re:", "").replace("fwd:", "").strip()
+    dedup_key = f"{sender.lower()}|{norm_subject}"
+    time_limit = datetime.now(timezone.utc) - timedelta(hours=24)
+    dup = db.emails.find_one({
+        "account_id": account_id,
+        "sender": sender,
+        "subject": subject,
+        "created_at": {"$gte": time_limit},
+    })
+    if dup:
+        logger.info("Skipping duplicate email '%s' within 24h", subject)
+        return
+
+    # 4. Classification (never discards email, defaults to Other)
+    category = classify_email(subject, body_text)
+
+    # 5. Deadline and date extraction
+    extraction = get_deadline_extraction(subject, body_text)
+    deadline = extraction.deadline
+    confidence = extraction.confidence_score
+    ambiguous = extraction.is_ambiguous
+
+    # 6. Store email record
+    import json
+    email_doc = {
+        "account_id": account_id,
+        "user_id": user_id,
+        "gmail_message_id": gmail_id,
+        "gmail_thread_id": thread_id,
+        "sender": sender,
+        "recipients": recipients if isinstance(recipients, str) else ", ".join(recipients),
+        "subject": subject,
+        "received_at": received_at,
+        "category": category,
+        "extracted_deadline": deadline,
+        "confidence_score": confidence,
+        "ambiguous_date": ambiguous,
+        "plain_body": body_text,
+        "html_body": html_body,
+        "attachments_meta": json.dumps(attachments),
+        "labels": ", ".join(labels) if isinstance(labels, list) else str(labels),
+        "processing_status": "completed",
+        "created_at": datetime.now(timezone.utc),
+        "updated_at": datetime.now(timezone.utc),
+    }
+
+    inserted = db.emails.insert_one(email_doc)
+    email_id = str(inserted.get("id") or inserted.get("_id"))
+    logger.info("Processed email '%s' [%s] -> ID: %s", subject, category, email_id)
+
+    # 7. Check if historical cutoff prevents notification storm
+    is_historical = False
+    if settings.notification_cutoff_hours > 0 and received_at:
+        cutoff_dt = datetime.now(timezone.utc) - timedelta(hours=settings.notification_cutoff_hours)
+        if received_at < cutoff_dt:
+            is_historical = True
+            logger.info("Email '%s' is older than %d hours; skipping immediate notification.", subject, settings.notification_cutoff_hours)
+
+    # 8. Dispatch notification according to mode
+    destinations = resolve_destinations(db, account_id, category)
+
+    if not is_historical and destinations:
+        if settings.notification_mode == "immediate":
+            for dest in destinations:
+                dest_type = dest.get("type")
+                target_id = dest.get("target_id")
+                msg_text = format_email_notification(email_doc)
+                idempotency_key = f"imm_{email_id}_{dest_type}_{target_id}"
+                deliver_notification_idempotent(
+                    email_id=email_id,
+                    channel=dest_type,
+                    destination_id=target_id,
+                    notification_type="immediate",
+                    message=msg_text,
+                    idempotency_key=idempotency_key,
+                    user_id=user_id,
+                )
+        elif settings.notification_mode == "summary":
+            _digest_buffer.append(email_doc)
+
+    # 9. Schedule deadline reminders if a confident submission deadline exists
+    if deadline and deadline > datetime.now(timezone.utc) and not ambiguous:
+        offsets = settings.reminder_offsets_minutes
+        for dest in destinations:
+            dest_id = str(dest.get("id") or dest.get("_id"))
+            for offset in offsets:
+                scheduled_time = deadline - timedelta(minutes=offset)
+                if scheduled_time <= datetime.now(timezone.utc):
+                    continue  # already in the past
+
+                reminder_message = (
+                    f"⏰ *{category} Deadline Reminder*\n\n"
+                    f"*Subject:* {subject}\n"
+                    f"*From:* {sender}\n"
+                    f"*Deadline:* {deadline.strftime('%Y-%m-%d %I:%M %p UTC')}\n"
+                    f"⏳ *Due in:* {offset // 60} hours\n\n"
+                    f"🔗 [Open Email](https://mail.google.com/mail/u/0/#inbox/{gmail_id})"
+                )
+
+                db.reminders.insert_one({
+                    "email_id": email_id,
+                    "user_id": user_id,
+                    "destination_id": dest_id,
+                    "message": reminder_message,
+                    "scheduled_at": scheduled_time,
+                    "status": ReminderStatus.pending.value,
+                    "retry_count": 0,
+                    "created_at": datetime.now(timezone.utc),
+                })
+                logger.info("Scheduled reminder for '%s' at %s", subject, scheduled_time)
+
+        # Calendar synchronization
+        try:
+            sync_email_deadline(db, email_doc)
+        except Exception as exc:
+            logger.warning("Calendar sync error for %s: %s", email_id, exc)
 
 
-def dispatch_due_reminders(db: Database) -> int:
-    now = datetime.utcnow()
+def _check_and_dispatch_digest(db):
+    """Flushes buffered emails in summary mode at periodic intervals."""
+    global _digest_buffer, _last_digest_time
+    now = datetime.now(timezone.utc)
+    interval_sec = settings.digest_interval_minutes * 60
+
+    if (now - _last_digest_time).total_seconds() >= interval_sec and _digest_buffer:
+        digest_emails = list(_digest_buffer)
+        _digest_buffer.clear()
+        _last_digest_time = now
+
+        text = format_digest_summary(digest_emails)
+        # Deliver digest to default destinations
+        default_dests = list(db.destinations.find({"is_default": True, "active": True}))
+        if not default_dests:
+            default_dests = list(db.destinations.find({"active": True}))
+
+        for dest in default_dests:
+            dest_type = dest.get("type")
+            target_id = dest.get("target_id")
+            key = f"digest_{now.strftime('%Y%m%d%H%M')}_{dest_type}_{target_id}"
+            deliver_notification_idempotent(
+                email_id=None,
+                channel=dest_type,
+                destination_id=target_id,
+                notification_type="summary",
+                message=text,
+                idempotency_key=key,
+            )
+
+
+def dispatch_due_reminders(db) -> int:
+    """
+    Finds and dispatches due reminders with exponential backoff on retry.
+    Dispatches independently per channel (failure in one does not block others).
+    """
+    now = datetime.now(timezone.utc)
     due_reminders = list(db.reminders.find({
         "status": ReminderStatus.pending.value,
-        "reminder_time": {"$lte": now}
+        "scheduled_at": {"$lte": now},
     }))
 
     if not due_reminders:
@@ -213,41 +347,61 @@ def dispatch_due_reminders(db: Database) -> int:
 
     sent_count = 0
     for r in due_reminders:
-        r_id_str = str(r["_id"])
-        dest = db.destinations.find_one({"_id": ObjectId(r["destination_id"])})
+        r_id = str(r.get("id") or r.get("_id"))
+        dest_id = r.get("destination_id")
+        dest = db.destinations.find_one({"id": dest_id}) or db.destinations.find_one({"_id": dest_id})
+        if not dest:
+            # Fallback to default
+            dest = db.destinations.find_one({"is_default": True})
+
         if not dest:
             db.reminders.update_one(
-                {"_id": ObjectId(r_id_str)},
-                {"$set": {"status": ReminderStatus.failed.value, "last_error": "Destination missing"}}
+                {"id": r_id},
+                {"$set": {
+                    "status": ReminderStatus.failed.value,
+                    "last_error": f"Destination {dest_id} not found",
+                }}
             )
             continue
 
-        # Build a namespace object for notifier
-        class _Dest:
-            pass
-        dest_obj = _Dest()
-        dest_obj.type = dest.get("type")
-        dest_obj.target_id = dest.get("target_id")
+        channel = dest.get("type")
+        target_id = dest.get("target_id")
+        message = r.get("message", "")
+        idempotency_key = f"reminder_{r_id}_{channel}_{r.get('retry_count', 0)}"
 
-        success, error_msg = send_notification(dest_obj, r["message"])
+        success, err = deliver_notification_idempotent(
+            email_id=r.get("email_id"),
+            channel=channel,
+            destination_id=target_id,
+            notification_type="reminder",
+            message=message,
+            idempotency_key=idempotency_key,
+        )
+
         if success:
             db.reminders.update_one(
-                {"_id": ObjectId(r_id_str)},
+                {"id": r_id},
                 {"$set": {
                     "status": ReminderStatus.sent.value,
-                    "sent_at": datetime.utcnow()
+                    "sent_at": datetime.now(timezone.utc),
+                    "last_error": None,
                 }}
             )
             sent_count += 1
         else:
-            retries = r.get("retries", 0) + 1
-            status = ReminderStatus.failed.value if retries >= 3 else ReminderStatus.pending.value
+            retry_count = r.get("retry_count", 0) + 1
+            # Exponential backoff delay: 1 min, 2 min, 4 min, etc.
+            backoff_minutes = 2 ** retry_count
+            new_scheduled_at = now + timedelta(minutes=backoff_minutes)
+            new_status = ReminderStatus.failed.value if retry_count >= 3 else ReminderStatus.pending.value
+
             db.reminders.update_one(
-                {"_id": ObjectId(r_id_str)},
+                {"id": r_id},
                 {"$set": {
-                    "status": status,
-                    "retries": retries,
-                    "last_error": error_msg
+                    "status": new_status,
+                    "retry_count": retry_count,
+                    "scheduled_at": new_scheduled_at if new_status == ReminderStatus.pending.value else r.get("scheduled_at"),
+                    "last_error": err,
                 }}
             )
 

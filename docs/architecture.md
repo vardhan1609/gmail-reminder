@@ -1,65 +1,85 @@
-# Architecture Overview
+# System Architecture
 
-Gmail Reminder is a multi-service system designed to monitor Gmail accounts, classify incoming emails, extract deadlines, and send reminders to various notification channels.
+The Gmail-to-WhatsApp-and-Telegram system continuously monitors Gmail mailboxes, extracts actionable deadlines, normalizes content, and dispatches real-time notifications and reminders.
 
 ```mermaid
-graph TD
-    subgraph Frontend
-        D[Dashboard UI]
-    end
-
-    subgraph Backend [FastAPI Backend]
-        B[API Server]
-        S[APScheduler]
-        C[Classifier & Parser]
-    end
-
-    subgraph Messaging Bridge [Node.js WhatsApp Bridge]
-        W[Express Server]
-        WW[whatsapp-web.js / Meta Proxy]
-    end
-
-    subgraph Database
-        DB[(MongoDB)]
-    end
-
-    subgraph Third Party
+flowchart TD
+    subgraph Gmail [Google Workspace Gmail]
         G[Gmail API]
-        GC[Google Calendar]
-        O[Outlook Calendar]
-        T[Telegram API]
     end
 
-    D <-->|REST API / Proxy| B
-    B <--> DB
-    S <--> DB
-    S --> C
-    C --> G
-    S --> GC
-    S --> O
-    B -->|HTTP Proxy| W
-    W --> WW
-    WW -->|Message| T
-    WW -->|Message| W
+    subgraph Connector [Gmail API Connector]
+        O[OAuth 2.0 Client]
+        H[History API / Incremental Sync]
+        P[Pagination & Label Filters]
+    end
+
+    subgraph Normalization [Normalization & Deduplication]
+        MIME[Recursive MIME Walker]
+        SAN[HTML Sanitizer & Injection Guard]
+        DEDUP[Unique Gmail ID & 24h Soft Dedup]
+    end
+
+    subgraph Pipeline [Processing Pipeline]
+        CLS[11-Category Classifier]
+        EXT[Deadline & Ambiguity Extractor]
+    end
+
+    subgraph Storage [Database - SQLite / PostgreSQL]
+        DB_E[(Email Records)]
+        DB_R[(Reminders)]
+        DB_N[(Notification Deliveries)]
+        DB_S[(Sync State)]
+    end
+
+    subgraph Scheduler [Background Worker / Dispatcher]
+        POLL[Poll Worker]
+        DISP[Reminder Dispatcher]
+        DIG[Digest / Summary Generator]
+    end
+
+    subgraph Channels [Messaging Adapters]
+        WA[WhatsApp Adapter]
+        TG[Telegram Bot Adapter]
+    end
+
+    subgraph Recipients [Destination Targets]
+        WAG[WhatsApp Group / 1:1]
+        TGG[Telegram Group / Chat]
+    end
+
+    G -->|OAuth 2.0| O
+    O --> H
+    H --> P
+    P --> MIME
+    MIME --> SAN
+    SAN --> DEDUP
+    DEDUP --> CLS
+    CLS --> EXT
+    EXT --> Storage
+    Storage <--> Scheduler
+    Scheduler --> WA
+    Scheduler --> TG
+    WA --> WAG
+    TG --> TGG
 ```
 
-## Component Roles
+## Key Architectural Principles
 
-1. **Dashboard UI (Frontend)**:
-   - Built with Vanilla HTML/CSS/JS.
-   - Served by FastAPI, communicates with the backend via REST endpoints.
-   - Provides a unified control center for mailboxes, destinations, routing rules, email logs, and WhatsApp configuration.
+1. **Category Inclusivity:**
+   Processes all email categories (Academics, Examinations, Placements, Fees, Meetings, Personal, Bills, Travel, Newsletters, Security alerts, Other). An email is never dropped due to classification failure.
 
-2. **FastAPI Server & Scheduler (Backend)**:
-   - Polls configured Gmail accounts in background threads.
-   - Parses email headers and body text.
-   - Classifies emails into categories (Exam, Assignment, etc.) and extracts deadlines (via Regex or optional Anthropic LLM).
-   - Routes due notifications to WhatsApp/Telegram bridges.
-   - Synchronizes deadlines to Google and Outlook calendars.
+2. **Accurate Date Handling:**
+   Distinguishes submission deadlines from general event dates, email timestamps, and ambiguous slash dates. Ambiguous dates are flagged for review rather than inventing false alarms.
 
-3. **WhatsApp Bridge**:
-   - A standalone Node.js service that runs an Express server.
-   - Operates in one of two modes: `webjs` (unofficial Puppeteer-based session allowing group posts) or `meta` (official ToS-compliant Cloud API for 1:1 notifications).
+3. **Channel Independence:**
+   WhatsApp and Telegram adapters operate independently. A temporary rate limit or outage on one platform never blocks delivery on the other.
 
-4. **MongoDB**:
-   - Stores accounts, destinations, routing rules, classified emails, scheduled reminders, and sync states.
+4. **Idempotency & Deduplication:**
+   Every message dispatched is recorded in `NotificationDelivery` with an idempotency key (`{email_id}_{channel}_{destination_id}_{type}`) preventing duplicate sends even during retries or worker restarts.
+
+5. **Security & Privacy:**
+   - Tokens are encrypted at rest via symmetric Fernet encryption (`GOOGLE_TOKEN_ENCRYPTION_KEY`).
+   - HTML bodies are sanitized, stripping `<script>`, `<iframe>`, and event handlers.
+   - Credentials and bot tokens are automatically redacted in structured JSON logs.
+   - Privacy mode allows sending notifications with subject, sender, and Gmail link only, without sharing email body contents into group chats.

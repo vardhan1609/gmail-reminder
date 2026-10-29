@@ -1,0 +1,45 @@
+# Production VPS Docker Compose (Backend + PostgreSQL + WhatsApp Bridge)
+# Frontend is hosted on Vercel.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: gmail-reminder-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-gmail_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-gmail_password}
+      POSTGRES_DB: ${POSTGRES_DB:-gmail_reminder}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-gmail_user} -d ${POSTGRES_DB:-gmail_reminder}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: gmail-reminder-backend
+    restart: always
+    ports:
+      - "127.0.0.1:8000:8000"
+    env_file: .env
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-gmail_user}:${POSTGRES_PASSWORD:-gmail_password}@postgres:5432/${POSTGRES_DB:-gmail_reminder}
+      - COOKIE_SECURE=true
+      - COOKIE_SAMESITE=none
+    volumes:
+      - ./data:/app/data
+      - ./tokens:/app/tokens
+      - ./logs:/app/logs
+      - ./whatsapp-bridge/session:/app/whatsapp-bridge/session
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  pg_data:
+

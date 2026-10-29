@@ -27,8 +27,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY whatsapp-bridge ./whatsapp-bridge
 RUN cd whatsapp-bridge && npm install --omit=dev
 
-# Copy FastAPI backend code
+# Copy FastAPI backend code and migration configuration
 COPY backend/app ./app
+COPY backend/alembic ./alembic
+COPY backend/alembic.ini ./alembic.ini
 
 RUN mkdir -p logs
 

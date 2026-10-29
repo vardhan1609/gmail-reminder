@@ -1,12 +1,21 @@
 services:
-  mongo:
-    image: mongo:7
-    container_name: gmail-reminder-mongo
+  postgres:
+    image: postgres:16-alpine
+    container_name: gmail-reminder-postgres
     ports:
-      - "27017:27017"
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-gmail_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-gmail_password}
+      POSTGRES_DB: ${POSTGRES_DB:-gmail_reminder}
     volumes:
-      - mongo_data:/data/db
+      - pg_data:/var/lib/postgresql/data
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-gmail_user} -d ${POSTGRES_DB:-gmail_reminder}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   backend:
     build:
@@ -17,18 +26,30 @@ services:
       - "8000:8000"
     env_file: .env
     environment:
-      - MONGO_URI=mongodb://mongo:27017
-      - MONGO_DB=gmail_reminder
-      # Accesses the WhatsApp bridge on localhost inside the same container
+      - DATABASE_URL=${DATABASE_URL:-postgresql://gmail_user:gmail_password@postgres:5432/gmail_reminder}
       - WHATSAPP_SERVICE_URL=http://localhost:3000
     volumes:
+      - ./data:/app/data
       - ./tokens:/app/tokens
       - ./logs:/app/logs
-      # Bind mount the WhatsApp bridge session volume so sessions persist on the host
       - ./whatsapp-bridge/session:/app/whatsapp-bridge/session
     depends_on:
-      - mongo
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: gmail-reminder-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://backend:8000/api/v1
+    depends_on:
+      - backend
     restart: unless-stopped
 
 volumes:
-  mongo_data:
+  pg_data:
