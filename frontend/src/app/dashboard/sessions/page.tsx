@@ -79,14 +79,14 @@ export default function SessionsPage() {
 
       <main className="flex-1 p-8 space-y-6 max-w-4xl mx-auto w-full">
         {error && (
-          <div className="flex items-center gap-2 p-4 text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl">
+          <div className="flex items-center gap-2 p-4 text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-xl">
             <AlertCircle className="h-5 w-5 shrink-0" />
             <span>{error}</span>
           </div>
         )}
 
         {successMsg && (
-          <div className="flex items-center gap-2 p-4 text-sm text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-xl">
+          <div className="flex items-center gap-2 p-4 text-sm text-emerald-800 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900/50 rounded-xl">
             <CheckCircle2 className="h-5 w-5 shrink-0" />
             <span>{successMsg}</span>
           </div>
@@ -105,7 +105,7 @@ export default function SessionsPage() {
                 variant="outline"
                 size="sm"
                 onClick={() => setRevokeAllOpen(true)}
-                className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200 text-xs"
+                className="text-destructive hover:bg-destructive/10 border-destructive/30 text-xs"
               >
                 Log Out All Other Devices
               </Button>
@@ -119,15 +119,15 @@ export default function SessionsPage() {
                 <Skeleton className="h-16 w-full" />
               </div>
             ) : sessions.length === 0 ? (
-              <div className="text-center py-10 text-slate-500">
+              <div className="text-center py-10 text-muted-foreground">
                 <p>No active sessions found.</p>
               </div>
             ) : (
-              <div className="divide-y divide-slate-100">
+              <div className="divide-y divide-border">
                 {sessions.map((s) => (
                   <div key={s.id} className="py-4 flex items-center justify-between gap-4">
                     <div className="flex items-start gap-3">
-                      <div className="h-10 w-10 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center shrink-0">
+                      <div className="h-10 w-10 rounded-lg bg-muted text-muted-foreground flex items-center justify-center shrink-0">
                         {s.user_agent?.toLowerCase().includes("mobile") ? (
                           <Smartphone className="h-5 w-5" />
                         ) : (
@@ -136,7 +136,7 @@ export default function SessionsPage() {
                       </div>
                       <div>
                         <div className="flex items-center gap-2">
-                          <p className="text-sm font-semibold text-slate-900 font-mono">
+                          <p className="text-sm font-semibold text-foreground font-mono">
                             {s.ip_address || "Unknown IP"}
                           </p>
                           {s.is_current && (

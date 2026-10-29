@@ -227,6 +227,7 @@ class NotificationPreferencesModel(Base):
     notification_cutoff_hours = Column(Integer, nullable=False, default=24)
     reminder_offsets_min = Column(String(100), nullable=False, default="1440,360,60")
     included_categories = Column(Text, nullable=True)  # JSON list
+    theme_preference = Column(String(20), nullable=False, default="system")  # light, dark, system
     created_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
     updated_at = Column(DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now)
 
@@ -242,6 +243,7 @@ class NotificationPreferencesModel(Base):
             "notification_cutoff_hours": self.notification_cutoff_hours,
             "reminder_offsets_min": self.reminder_offsets_min,
             "included_categories": json.loads(self.included_categories) if self.included_categories else [],
+            "theme_preference": self.theme_preference or "system",
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
@@ -545,3 +547,29 @@ class CalendarEventModel(Base):
             "last_error": self.last_error,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
+
+
+class AppEventModel(Base):
+    __tablename__ = "app_events"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    event_type = Column(String(100), nullable=False, index=True)
+    event_id = Column(String(64), unique=True, nullable=False, index=True)
+    payload = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=utc_now, index=True)
+
+    __table_args__ = (
+        Index("ix_app_events_user_created", "user_id", "created_at"),
+    )
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "user_id": self.user_id,
+            "event_type": self.event_type,
+            "event_id": self.event_id,
+            "payload": json.loads(self.payload) if self.payload else {},
+            "created_at": _format_utc_iso(self.created_at),
+        }
+

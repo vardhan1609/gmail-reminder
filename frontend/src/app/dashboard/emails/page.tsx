@@ -21,6 +21,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog } from "@/components/ui/dialog";
 import { api, EmailRecord } from "@/lib/api";
 import { formatDate, formatDualDate } from "@/lib/utils";
+import { useRealtime } from "@/components/providers/realtime-provider";
 
 const CATEGORIES = [
   "All Categories",
@@ -71,9 +72,67 @@ export default function EmailsPage() {
     }
   };
 
+  const { subscribe } = useRealtime();
+
   useEffect(() => {
     fetchEmails();
   }, [page, selectedCategory]);
+
+  useEffect(() => {
+    const unsubEmail = subscribe("email.received", (data: any) => {
+      if (page === 0) {
+        setEmails((prev) => {
+          if (prev.some((e) => e.id === data.email_id)) return prev;
+          const newEmail: EmailRecord = {
+            id: data.email_id,
+            account_id: null,
+            gmail_message_id: data.email_id,
+            gmail_thread_id: null,
+            sender: data.sender,
+            recipients: null,
+            subject: data.subject,
+            received_at: data.received_at,
+            category: data.category || "Other",
+            extracted_deadline: null,
+            confidence_score: 1.0,
+            ambiguous_date: false,
+            plain_body: null,
+            labels: null,
+            processing_status: "completed",
+            created_at: data.received_at,
+            updated_at: data.received_at,
+          };
+          return [newEmail, ...prev];
+        });
+      }
+      setTotal((t) => t + 1);
+    });
+
+    const unsubClassified = subscribe("email.classified", (data: any) => {
+      setEmails((prev) =>
+        prev.map((e) =>
+          e.id === data.email_id
+            ? {
+                ...e,
+                category: data.category,
+                extracted_deadline: data.extracted_deadline,
+                confidence_score: data.confidence_score,
+              }
+            : e
+        )
+      );
+    });
+
+    const unsubSync = subscribe("gmail.sync.completed", () => {
+      fetchEmails();
+    });
+
+    return () => {
+      unsubEmail();
+      unsubClassified();
+      unsubSync();
+    };
+  }, [subscribe, page]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -92,10 +151,10 @@ export default function EmailsPage() {
 
       <main className="flex-1 p-8 space-y-6 max-w-7xl mx-auto w-full">
         {/* Filter bar */}
-        <div className="flex flex-col sm:flex-row gap-4 justify-between items-center bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+        <div className="flex flex-col sm:flex-row gap-4 justify-between items-center bg-card p-4 rounded-xl border border-border shadow-sm">
           <form onSubmit={handleSearchSubmit} className="flex gap-2 w-full sm:w-80">
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+              <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
                 type="text"
                 placeholder="Search by sender or subject..."
@@ -111,14 +170,14 @@ export default function EmailsPage() {
 
           {/* Category Dropdown */}
           <div className="flex items-center gap-2 w-full sm:w-auto">
-            <Filter className="h-4 w-4 text-slate-400" />
+            <Filter className="h-4 w-4 text-muted-foreground" />
             <select
               value={selectedCategory}
               onChange={(e) => {
                 setSelectedCategory(e.target.value);
                 setPage(0);
               }}
-              className="text-xs border border-slate-200 rounded-md px-3 py-2 bg-white text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="text-xs border border-input rounded-md px-3 py-2 bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
             >
               {CATEGORIES.map((c) => (
                 <option key={c} value={c}>
@@ -130,7 +189,7 @@ export default function EmailsPage() {
         </div>
 
         {error && (
-          <div className="flex items-center gap-2 p-4 text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl">
+          <div className="flex items-center gap-2 p-4 text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-xl">
             <AlertCircle className="h-5 w-5 shrink-0" />
             <span>{error}</span>
           </div>
@@ -163,7 +222,7 @@ export default function EmailsPage() {
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm">
-                  <thead className="bg-slate-50 text-slate-600 font-medium text-xs border-b border-slate-200">
+                  <thead className="bg-slate-50 dark:bg-slate-900/60 text-muted-foreground font-medium text-xs border-b border-border">
                     <tr>
                       <th className="py-3 px-6">Subject</th>
                       <th className="py-3 px-4">Sender</th>
@@ -173,13 +232,13 @@ export default function EmailsPage() {
                       <th className="py-3 px-6 text-right">Actions</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100">
+                  <tbody className="divide-y divide-border">
                     {emails.map((e) => (
-                      <tr key={e.id} className="hover:bg-slate-50 transition-colors">
-                        <td className="py-3.5 px-6 font-medium text-slate-900 max-w-xs truncate">
+                      <tr key={e.id} className="hover:bg-muted/50 transition-colors">
+                        <td className="py-3.5 px-6 font-medium text-foreground max-w-xs truncate">
                           {e.subject}
                         </td>
-                        <td className="py-3.5 px-4 text-slate-600 max-w-[200px] truncate text-xs">
+                        <td className="py-3.5 px-4 text-muted-foreground max-w-[200px] truncate text-xs">
                           {e.sender}
                         </td>
                         <td className="py-3.5 px-4">
@@ -268,34 +327,34 @@ export default function EmailsPage() {
       >
         {selectedEmail && (
           <div className="space-y-4 text-xs max-h-[70vh] overflow-y-auto">
-            <div className="grid grid-cols-2 gap-3 p-3 bg-slate-50 border border-slate-200 rounded-lg">
+            <div className="grid grid-cols-2 gap-3 p-3 bg-muted/40 border border-border rounded-lg">
               <div>
-                <p className="text-slate-500 font-semibold">Category</p>
-                <p className="text-slate-900 font-medium">{selectedEmail.category}</p>
+                <p className="text-muted-foreground font-semibold">Category</p>
+                <p className="text-foreground font-medium">{selectedEmail.category}</p>
               </div>
               <div>
-                <p className="text-slate-500 font-semibold">Received At</p>
-                <p className="text-slate-900 font-medium">
+                <p className="text-muted-foreground font-semibold">Received At</p>
+                <p className="text-foreground font-medium">
                   {formatDualDate(selectedEmail.received_at || selectedEmail.created_at)?.local || formatDate(selectedEmail.received_at || selectedEmail.created_at)}
                 </p>
-                <p className="text-[11px] text-slate-500 font-mono mt-0.5">
+                <p className="text-[11px] text-muted-foreground font-mono mt-0.5">
                   {formatDualDate(selectedEmail.received_at || selectedEmail.created_at)?.utc || ""}
                 </p>
               </div>
               {selectedEmail.extracted_deadline && (
                 <div>
-                  <p className="text-slate-500 font-semibold">Extracted Deadline</p>
-                  <p className="text-emerald-700 font-medium">
+                  <p className="text-muted-foreground font-semibold">Extracted Deadline</p>
+                  <p className="text-emerald-600 dark:text-emerald-400 font-medium">
                     {formatDualDate(selectedEmail.extracted_deadline)?.local || formatDate(selectedEmail.extracted_deadline)}
                   </p>
-                  <p className="text-[11px] text-slate-500 font-mono mt-0.5">
+                  <p className="text-[11px] text-muted-foreground font-mono mt-0.5">
                     {formatDualDate(selectedEmail.extracted_deadline)?.utc || ""}
                   </p>
                 </div>
               )}
               <div>
-                <p className="text-slate-500 font-semibold">Classification Confidence</p>
-                <p className="text-slate-900 font-medium">
+                <p className="text-muted-foreground font-semibold">Classification Confidence</p>
+                <p className="text-foreground font-medium">
                   {(selectedEmail.confidence_score * 100).toFixed(0)}%
                 </p>
               </div>
@@ -303,8 +362,8 @@ export default function EmailsPage() {
 
             {/* Email Body */}
             <div>
-              <p className="font-semibold text-slate-700 mb-1">Plain Text Body</p>
-              <div className="p-3 bg-white border border-slate-200 rounded-lg whitespace-pre-wrap font-sans text-slate-800 max-h-60 overflow-y-auto leading-relaxed">
+              <p className="font-semibold text-foreground mb-1">Plain Text Body</p>
+              <div className="p-3 bg-card border border-border rounded-lg whitespace-pre-wrap font-sans text-foreground max-h-60 overflow-y-auto leading-relaxed">
                 {selectedEmail.plain_body || "(No body text extracted)"}
               </div>
             </div>

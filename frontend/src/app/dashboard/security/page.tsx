@@ -141,12 +141,12 @@ export default function SecurityPage() {
           </CardHeader>
 
           <CardContent className="space-y-4">
-            <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl flex items-start gap-4">
+            <div className="p-4 bg-muted/40 border border-border rounded-xl flex items-start gap-4">
               <div
                 className={`h-10 w-10 rounded-lg flex items-center justify-center shrink-0 ${
                   user?.mfa_enabled
-                    ? "bg-emerald-100 text-emerald-700"
-                    : "bg-slate-200 text-slate-600"
+                    ? "bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300"
+                    : "bg-muted text-muted-foreground"
                 }`}
               >
                 {user?.mfa_enabled ? (
@@ -197,16 +197,16 @@ export default function SecurityPage() {
       >
         {enrollData && (
           <form onSubmit={handleConfirmEnrollment} className="space-y-4">
-            <div className="flex flex-col items-center justify-center p-4 bg-slate-50 border border-slate-200 rounded-lg">
+            <div className="flex flex-col items-center justify-center p-4 bg-muted/40 border border-border rounded-lg">
               {/* QR Code image */}
               <img
                 src={enrollData.qr_code}
                 alt="MFA QR Code"
-                className="h-44 w-44 rounded border bg-white p-2 shadow-sm"
+                className="h-44 w-44 rounded border border-border bg-white p-2 shadow-sm"
               />
               <div className="mt-3 text-center">
-                <p className="text-xs text-slate-500">Cannot scan? Enter code manually:</p>
-                <code className="text-xs font-mono font-bold bg-white px-2 py-1 rounded border mt-1 inline-block select-all">
+                <p className="text-xs text-muted-foreground">Cannot scan? Enter code manually:</p>
+                <code className="text-xs font-mono font-bold bg-background text-foreground px-2 py-1 rounded border border-border mt-1 inline-block select-all">
                   {enrollData.secret}
                 </code>
               </div>
@@ -253,13 +253,13 @@ export default function SecurityPage() {
         description="Save these codes in a secure password manager. This is the only time they are displayed."
       >
         <div className="space-y-4">
-          <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-xs">
+          <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/50 rounded-lg text-amber-800 dark:text-amber-200 text-xs">
             ⚠️ If you lose your authenticator device, each of these 10 codes can be used once to access your account.
           </div>
 
-          <div className="grid grid-cols-2 gap-2 p-3 bg-slate-50 border border-slate-200 rounded-lg font-mono text-xs font-bold text-slate-800">
+          <div className="grid grid-cols-2 gap-2 p-3 bg-muted/40 border border-border rounded-lg font-mono text-xs font-bold text-foreground">
             {recoveryCodes.map((code, idx) => (
-              <div key={idx} className="p-1.5 bg-white border rounded text-center">
+              <div key={idx} className="p-1.5 bg-card border border-border text-foreground rounded text-center">
                 {code}
               </div>
             ))}

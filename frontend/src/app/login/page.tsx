@@ -95,9 +95,9 @@ function LoginForm() {
             Sign In
           </Button>
 
-          <p className="text-center text-xs text-slate-500">
+          <p className="text-center text-xs text-muted-foreground">
             Don&apos;t have an account?{" "}
-            <Link href="/signup" className="text-blue-600 font-semibold hover:underline">
+            <Link href="/signup" className="text-primary font-semibold hover:underline">
               Sign Up
             </Link>
           </p>
@@ -109,8 +109,8 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-slate-50">
-      <Suspense fallback={<div className="text-slate-500 text-sm">Loading sign in...</div>}>
+    <div className="min-h-screen flex items-center justify-center p-4 bg-background">
+      <Suspense fallback={<div className="text-muted-foreground text-sm">Loading sign in...</div>}>
         <LoginForm />
       </Suspense>
     </div>

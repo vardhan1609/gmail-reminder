@@ -35,8 +35,8 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-slate-50">
-      <Card className="w-full max-w-md shadow-md border-slate-200">
+    <div className="min-h-screen flex items-center justify-center p-4 bg-background">
+      <Card className="w-full max-w-md shadow-md border-border">
         <CardHeader className="text-center pb-4">
           <div className="mx-auto h-12 w-12 rounded-xl bg-blue-600 flex items-center justify-center text-white mb-3 shadow">
             <KeyRound className="h-6 w-6" />
@@ -61,14 +61,14 @@ export default function ForgotPasswordPage() {
                   <span>{message}</span>
                 </div>
                 {resetToken && (
-                  <div className="pt-2 border-t border-emerald-200">
-                    <p className="text-xs text-slate-600 mb-1">Your Reset Token:</p>
-                    <code className="block p-1.5 bg-white text-xs font-mono rounded border select-all">
+                  <div className="pt-2 border-t border-emerald-200 dark:border-emerald-900/60">
+                    <p className="text-xs text-muted-foreground mb-1">Your Reset Token:</p>
+                    <code className="block p-1.5 bg-background text-foreground text-xs font-mono rounded border border-border select-all">
                       {resetToken}
                     </code>
                     <Link
                       href={`/reset-password?token=${encodeURIComponent(resetToken)}`}
-                      className="mt-2 inline-block text-xs font-semibold text-blue-600 hover:underline"
+                      className="mt-2 inline-block text-xs font-semibold text-primary hover:underline"
                     >
                       Click here to reset password now →
                     </Link>
@@ -78,7 +78,7 @@ export default function ForgotPasswordPage() {
             )}
 
             <div className="space-y-1">
-              <label className="text-xs font-semibold text-slate-700">Account Email</label>
+              <label className="text-xs font-semibold text-foreground">Account Email</label>
               <Input
                 type="email"
                 placeholder="you@university.edu"
@@ -96,7 +96,7 @@ export default function ForgotPasswordPage() {
 
             <Link
               href="/login"
-              className="flex items-center justify-center gap-1.5 text-xs text-slate-600 hover:text-slate-900"
+              className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
             >
               <ArrowLeft className="h-3.5 w-3.5" /> Back to Sign In
             </Link>

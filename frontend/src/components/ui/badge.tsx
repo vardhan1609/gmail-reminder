@@ -7,12 +7,12 @@ export interface BadgeProps extends React.HTMLAttributes<HTMLDivElement> {
 
 function Badge({ className, variant = "default", ...props }: BadgeProps) {
   const variants = {
-    default: "border-transparent bg-blue-600 text-white shadow hover:bg-blue-700",
-    secondary: "border-transparent bg-slate-100 text-slate-900 hover:bg-slate-200",
-    destructive: "border-transparent bg-red-100 text-red-800 hover:bg-red-200",
-    outline: "text-slate-950 border border-slate-200",
-    success: "border-transparent bg-emerald-100 text-emerald-800",
-    warning: "border-transparent bg-amber-100 text-amber-800",
+    default: "border-transparent bg-primary text-primary-foreground shadow hover:bg-primary/90",
+    secondary: "border-transparent bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700",
+    destructive: "border-transparent bg-red-100 text-red-800 dark:bg-red-950/70 dark:text-red-300 dark:border dark:border-red-800/50 hover:bg-red-200",
+    outline: "text-foreground border border-border",
+    success: "border-transparent bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300 dark:border dark:border-emerald-800/50",
+    warning: "border-transparent bg-amber-100 text-amber-800 dark:bg-amber-950/70 dark:text-amber-300 dark:border dark:border-amber-800/50",
   };
 
   return (
@@ -28,4 +28,3 @@ function Badge({ className, variant = "default", ...props }: BadgeProps) {
 }
 
 export { Badge };
-

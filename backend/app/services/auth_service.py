@@ -224,6 +224,23 @@ def validate_session(db: Session, raw_token: str) -> Optional[Tuple[UserSessionM
     return session, user
 
 
+def disconnect_user_sockets(user_id: str) -> None:
+    """Disconnect active WebSocket connections for a user upon session termination."""
+    try:
+        import asyncio
+        from app.websocket.manager import connection_manager
+        from app.websocket.publisher import get_main_event_loop
+        loop = None
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = get_main_event_loop()
+        if loop and loop.is_running():
+            asyncio.run_coroutine_threadsafe(connection_manager.disconnect_user(user_id), loop)
+    except Exception:
+        pass
+
+
 def revoke_session(db: Session, session_id: str, user_id: str) -> bool:
     """Revoke a specific session."""
     session = (
@@ -234,6 +251,10 @@ def revoke_session(db: Session, session_id: str, user_id: str) -> bool:
     if session:
         db.delete(session)
         db.commit()
+        # Check if user has any remaining sessions
+        remaining = db.query(UserSessionModel).filter(UserSessionModel.user_id == user_id).count()
+        if remaining == 0:
+            disconnect_user_sockets(user_id)
         return True
     return False
 
@@ -247,6 +268,8 @@ def revoke_all_user_sessions(
         query = query.filter(UserSessionModel.id != except_session_id)
     count = query.delete(synchronize_session=False)
     db.commit()
+    if not except_session_id:
+        disconnect_user_sockets(user_id)
     return count
 
 

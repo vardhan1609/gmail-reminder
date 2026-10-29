@@ -211,24 +211,24 @@ export default function IntegrationsPage() {
                 <Skeleton className="h-14 w-full" />
               </div>
             ) : connections.length === 0 ? (
-              <div className="text-center py-12 border border-dashed border-slate-200 rounded-xl bg-slate-50/50">
-                <Mail className="h-8 w-8 mx-auto mb-2 text-slate-400" />
-                <p className="text-sm font-semibold text-slate-800">No Gmail accounts connected yet</p>
-                <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
+              <div className="text-center py-12 border border-dashed border-border rounded-xl bg-muted/30">
+                <Mail className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+                <p className="text-sm font-semibold text-foreground">No Gmail accounts connected yet</p>
+                <p className="text-xs text-muted-foreground mt-1 max-w-sm mx-auto">
                   Click the button above to authorize read-only mailbox monitoring.
                 </p>
               </div>
             ) : (
-              <div className="divide-y divide-slate-100">
+              <div className="divide-y divide-border">
                 {connections.map((c) => (
                   <div key={c.id} className="py-4 flex items-center justify-between gap-4">
                     <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
+                      <div className="h-10 w-10 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold">
                         <Mail className="h-5 w-5" />
                       </div>
                       <div>
                         <div className="flex items-center gap-2">
-                          <p className="text-sm font-semibold text-slate-900">{c.email}</p>
+                          <p className="text-sm font-semibold text-foreground">{c.email}</p>
                           {c.label && (
                             <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-medium">
                               {c.label}
@@ -281,20 +281,20 @@ export default function IntegrationsPage() {
                 <Skeleton className="h-14 w-full" />
               </div>
             ) : integrations.length === 0 ? (
-              <div className="text-center py-12 border border-dashed border-slate-200 rounded-xl bg-slate-50/50">
-                <Plug className="h-8 w-8 mx-auto mb-2 text-slate-400" />
-                <p className="text-sm font-semibold text-slate-800">No alert channels configured</p>
-                <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
+              <div className="text-center py-12 border border-dashed border-border rounded-xl bg-muted/30">
+                <Plug className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+                <p className="text-sm font-semibold text-foreground">No alert channels configured</p>
+                <p className="text-xs text-muted-foreground mt-1 max-w-sm mx-auto">
                   Add a Telegram bot chat or WhatsApp destination to receive real-time notifications.
                 </p>
               </div>
             ) : (
-              <div className="divide-y divide-slate-100">
+              <div className="divide-y divide-border">
                 {integrations.map((i) => (
                   <div key={i.id} className="py-4 flex items-center justify-between gap-4">
                     <div>
                       <div className="flex items-center gap-2">
-                        <p className="text-sm font-semibold text-slate-900">{i.name}</p>
+                        <p className="text-sm font-semibold text-foreground">{i.name}</p>
                         <Badge variant="outline" className="text-[10px] uppercase font-mono">
                           {i.type}
                         </Badge>
@@ -345,11 +345,11 @@ export default function IntegrationsPage() {
       >
         <form onSubmit={handleAddDestination} className="space-y-4">
           <div className="space-y-1">
-            <label className="text-xs font-semibold text-slate-700">Channel Type</label>
+            <label className="text-xs font-semibold text-foreground">Channel Type</label>
             <select
               value={destType}
               onChange={(e) => setDestType(e.target.value as "telegram" | "whatsapp")}
-              className="w-full text-xs border border-slate-200 rounded-md p-2 bg-white"
+              className="w-full text-xs border border-input rounded-md p-2 bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
             >
               <option value="telegram">Telegram Bot</option>
               <option value="whatsapp">WhatsApp</option>

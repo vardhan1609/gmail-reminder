@@ -52,8 +52,8 @@ export default function SignupPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-slate-50">
-      <Card className="w-full max-w-md shadow-md border-slate-200">
+    <div className="min-h-screen flex items-center justify-center p-4 bg-background">
+      <Card className="w-full max-w-md shadow-md border-border">
         <CardHeader className="text-center pb-4">
           <div className="mx-auto h-12 w-12 rounded-xl bg-blue-600 flex items-center justify-center text-white mb-3 shadow">
             <Mail className="h-6 w-6" />
@@ -119,25 +119,25 @@ export default function SignupPage() {
             </div>
 
             {/* Password requirements indicators */}
-            <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-1 text-xs">
-              <p className="font-semibold text-slate-700 mb-1.5">Password requirements:</p>
+            <div className="p-3 bg-muted/40 border border-border rounded-lg space-y-1 text-xs">
+              <p className="font-semibold text-foreground mb-1.5">Password requirements:</p>
               <div className="grid grid-cols-2 gap-1">
-                <span className={`flex items-center gap-1 ${hasMinLength ? "text-emerald-600" : "text-slate-400"}`}>
+                <span className={`flex items-center gap-1 ${hasMinLength ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"}`}>
                   {hasMinLength ? <Check className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />} At least 8 chars
                 </span>
-                <span className={`flex items-center gap-1 ${hasUppercase ? "text-emerald-600" : "text-slate-400"}`}>
+                <span className={`flex items-center gap-1 ${hasUppercase ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"}`}>
                   {hasUppercase ? <Check className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />} Uppercase letter
                 </span>
-                <span className={`flex items-center gap-1 ${hasLowercase ? "text-emerald-600" : "text-slate-400"}`}>
+                <span className={`flex items-center gap-1 ${hasLowercase ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"}`}>
                   {hasLowercase ? <Check className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />} Lowercase letter
                 </span>
-                <span className={`flex items-center gap-1 ${hasNumber ? "text-emerald-600" : "text-slate-400"}`}>
+                <span className={`flex items-center gap-1 ${hasNumber ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"}`}>
                   {hasNumber ? <Check className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />} Number (0-9)
                 </span>
-                <span className={`flex items-center gap-1 ${hasSpecial ? "text-emerald-600" : "text-slate-400"}`}>
+                <span className={`flex items-center gap-1 ${hasSpecial ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"}`}>
                   {hasSpecial ? <Check className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />} Special character
                 </span>
-                <span className={`flex items-center gap-1 ${passwordsMatch ? "text-emerald-600" : "text-slate-400"}`}>
+                <span className={`flex items-center gap-1 ${passwordsMatch ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"}`}>
                   {passwordsMatch ? <Check className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />} Passwords match
                 </span>
               </div>
@@ -149,9 +149,9 @@ export default function SignupPage() {
               Create Account
             </Button>
 
-            <p className="text-center text-xs text-slate-500">
+            <p className="text-center text-xs text-muted-foreground">
               Already have an account?{" "}
-              <Link href="/login" className="text-blue-600 font-semibold hover:underline">
+              <Link href="/login" className="text-primary font-semibold hover:underline">
                 Sign In
               </Link>
             </p>

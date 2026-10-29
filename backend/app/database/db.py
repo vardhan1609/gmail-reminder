@@ -36,6 +36,7 @@ from app.models.db_models import (
     SyncStateModel,
     UserModel,
     UserSessionModel,
+    AppEventModel,
 )
 from app.utils.logger import get_logger
 
@@ -317,6 +318,7 @@ class DatabaseAdapter:
         self.notification_integrations = TableAdapter(NotificationIntegrationModel)
         self.notification_preferences = TableAdapter(NotificationPreferencesModel)
         self.audit_events = TableAdapter(AuditEventModel)
+        self.app_events = TableAdapter(AppEventModel)
 
     @property
     def admin(self):

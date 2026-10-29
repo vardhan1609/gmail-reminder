@@ -111,6 +111,7 @@ export interface NotificationPreferences {
   notification_cutoff_hours: number;
   reminder_offsets_min: string;
   included_categories: string;
+  theme_preference?: "light" | "dark" | "system";
 }
 
 export class ApiError extends Error {
