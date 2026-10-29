@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ConfirmDialog } from "@/components/ui/dialog";
 import { api, ReminderRecord } from "@/lib/api";
-import { formatDate } from "@/lib/utils";
+import { formatDate, formatDualDate } from "@/lib/utils";
 
 export default function RemindersPage() {
   const [reminders, setReminders] = useState<ReminderRecord[]>([]);
@@ -142,8 +142,13 @@ export default function RemindersPage() {
                         <td className="py-3.5 px-6 font-medium text-slate-900 max-w-sm truncate">
                           {r.message.split("\n")[0].replace(/[⏰*]/g, "").trim()}
                         </td>
-                        <td className="py-3.5 px-4 text-xs font-semibold text-slate-700">
-                          {formatDate(r.scheduled_at)}
+                        <td className="py-3.5 px-4 text-xs">
+                          <span className="font-semibold text-slate-700 block">
+                            {formatDualDate(r.scheduled_at)?.local || formatDate(r.scheduled_at)}
+                          </span>
+                          <span className="text-[10px] text-slate-400 font-mono block">
+                            {formatDualDate(r.scheduled_at)?.utcTime || ""}
+                          </span>
                         </td>
                         <td className="py-3.5 px-4">
                           <Badge
@@ -163,7 +168,16 @@ export default function RemindersPage() {
                           {r.retry_count}
                         </td>
                         <td className="py-3.5 px-4 text-xs text-slate-500">
-                          {r.sent_at ? formatDate(r.sent_at) : "—"}
+                          {r.sent_at ? (
+                            <div>
+                              <span className="block">{formatDualDate(r.sent_at)?.local || formatDate(r.sent_at)}</span>
+                              <span className="text-[10px] text-slate-400 font-mono block">
+                                {formatDualDate(r.sent_at)?.utcTime || ""}
+                              </span>
+                            </div>
+                          ) : (
+                            "—"
+                          )}
                         </td>
                         <td className="py-3.5 px-6 text-right">
                           <Button

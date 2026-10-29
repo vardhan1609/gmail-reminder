@@ -272,6 +272,16 @@ class AuditEventModel(Base):
 
 # ─── Multi-Tenant Application Core Data Models ───
 
+def _format_utc_iso(dt: Optional[datetime]) -> Optional[str]:
+    if not dt:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    else:
+        dt = dt.astimezone(timezone.utc)
+    return dt.isoformat()
+
+
 class EmailModel(Base):
     __tablename__ = "emails"
 
@@ -316,10 +326,10 @@ class EmailModel(Base):
             "sender": self.sender,
             "recipients": self.recipients,
             "subject": self.subject,
-            "received_at": self.received_at.isoformat() if self.received_at else None,
+            "received_at": _format_utc_iso(self.received_at),
             "category": self.category,
-            "extracted_deadline": self.extracted_deadline.isoformat() if self.extracted_deadline else None,
-            "deadline": self.extracted_deadline.isoformat() if self.extracted_deadline else None,
+            "extracted_deadline": _format_utc_iso(self.extracted_deadline),
+            "deadline": _format_utc_iso(self.extracted_deadline),
             "confidence_score": self.confidence_score,
             "ambiguous_date": self.ambiguous_date,
             "plain_body": self.plain_body,
@@ -329,8 +339,8 @@ class EmailModel(Base):
             "labels": self.labels,
             "processing_status": self.processing_status,
             "processed": self.processing_status == "completed",
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "created_at": _format_utc_iso(self.created_at),
+            "updated_at": _format_utc_iso(self.updated_at),
         }
 
 
@@ -363,14 +373,14 @@ class ReminderModel(Base):
             "email_id": self.email_id,
             "destination_id": self.destination_id,
             "message": self.message,
-            "scheduled_at": self.scheduled_at.isoformat() if self.scheduled_at else None,
-            "reminder_time": self.scheduled_at.isoformat() if self.scheduled_at else None,
+            "scheduled_at": _format_utc_iso(self.scheduled_at),
+            "reminder_time": _format_utc_iso(self.scheduled_at),
             "status": self.status,
             "retry_count": self.retry_count,
             "retries": self.retry_count,
             "last_error": self.last_error,
-            "sent_at": self.sent_at.isoformat() if self.sent_at else None,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "sent_at": _format_utc_iso(self.sent_at),
+            "created_at": _format_utc_iso(self.created_at),
         }
 
 

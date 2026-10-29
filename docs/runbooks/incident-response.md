@@ -74,3 +74,4 @@ If the WhatsApp Web.js session disconnects or is revoked on the phone:
    ```bash
    docker logs -f gmail-reminder-backend | grep -i qr
    ```
+

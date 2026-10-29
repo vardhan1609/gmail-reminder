@@ -18,9 +18,11 @@ from app.config import settings
 from app.database.db import get_db_session
 from app.middleware.auth import get_current_user, verify_resource_ownership
 from app.models.db_models import (
+    AccountModel,
     GmailConnectionModel,
     NotificationIntegrationModel,
     NotificationPreferencesModel,
+    SyncStateModel,
     UserModel,
 )
 from app.services.auth_service import log_audit_event
@@ -105,6 +107,41 @@ def list_gmail_connections(
         .order_by(GmailConnectionModel.created_at.desc())
         .all()
     )
+    if not connections:
+        acc = (
+            db.query(AccountModel)
+            .filter(
+                AccountModel.active == True,
+                (AccountModel.user_id == current_user.id)
+                | (AccountModel.email == current_user.email),
+            )
+            .first()
+        )
+        if acc and acc.token_path and os.path.isfile(acc.token_path):
+            now = datetime.now(timezone.utc)
+            conn = GmailConnectionModel(
+                user_id=current_user.id,
+                email=acc.email,
+                label=acc.label or "Primary Gmail",
+                token_path=acc.token_path,
+                active=acc.active,
+                calendar_sync_enabled=acc.calendar_sync_enabled,
+                created_at=acc.created_at or now,
+                updated_at=now,
+            )
+            db.add(conn)
+            acc.user_id = current_user.id
+            db.commit()
+            db.refresh(conn)
+            connections = [conn]
+
+    for c in connections:
+        if not c.last_sync_at:
+            st = db.query(SyncStateModel).filter(SyncStateModel.account_identifier == c.email).first()
+            if st and st.last_successful_sync:
+                c.last_sync_at = st.last_successful_sync
+                c.last_sync_status = st.last_sync_status or "idle"
+
     return connections
 
 
@@ -200,6 +237,15 @@ def disconnect_gmail(
             os.remove(conn.token_path)
         except OSError:
             pass
+
+    # Clean up corresponding legacy account and sync state so it does not ghost-poll or resurrect
+    db.query(AccountModel).filter(
+        (AccountModel.user_id == current_user.id) | (AccountModel.email == conn.email)
+    ).delete(synchronize_session=False)
+
+    db.query(SyncStateModel).filter(
+        SyncStateModel.account_identifier == conn.email
+    ).delete(synchronize_session=False)
 
     db.delete(conn)
     log_audit_event(

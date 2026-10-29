@@ -17,7 +17,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api, EmailRecord, ReminderRecord, GmailConnection, NotificationIntegration } from "@/lib/api";
-import { formatDate } from "@/lib/utils";
+import { formatDate, formatDualDate } from "@/lib/utils";
 
 export default function DashboardOverviewPage() {
   const [loading, setLoading] = useState(true);
@@ -190,8 +190,8 @@ export default function DashboardOverviewPage() {
                         <Badge variant="outline" className="text-[10px]">
                           {e.category}
                         </Badge>
-                        <span className="text-[10px] text-slate-400">
-                          {formatDate(e.received_at || e.created_at)}
+                        <span className="text-[10px] text-slate-400 font-medium">
+                          {formatDualDate(e.received_at || e.created_at)?.combined || formatDate(e.received_at || e.created_at)}
                         </span>
                       </div>
                     </div>
@@ -240,7 +240,7 @@ export default function DashboardOverviewPage() {
                           {r.message.split("\n")[0].replace(/[⏰*]/g, "").trim()}
                         </p>
                         <p className="text-xs text-slate-500 mt-0.5">
-                          Scheduled: {formatDate(r.scheduled_at)}
+                          Scheduled: {formatDualDate(r.scheduled_at)?.combined || formatDate(r.scheduled_at)}
                         </p>
                       </div>
                       <Badge

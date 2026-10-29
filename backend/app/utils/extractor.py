@@ -134,13 +134,23 @@ def extract_deadline_details(
                         is_ambiguous = True
 
                 parsed = dateparser.parse(candidate_raw, fuzzy=True, default=reference_time)
-                # Ensure timezone-aware
+                # If no explicit time was extracted, set to end-of-day in reference timezone
+                if not time_match:
+                    parsed = parsed.replace(hour=23, minute=59, second=0, microsecond=0)
+
+                # Ensure timezone-aware: inherit reference_time tz or UTC
                 if parsed.tzinfo is None:
-                    parsed = parsed.replace(tzinfo=timezone.utc)
+                    if reference_time and reference_time.tzinfo:
+                        parsed = parsed.replace(tzinfo=reference_time.tzinfo)
+                    else:
+                        parsed = parsed.replace(tzinfo=timezone.utc)
+
+                # Standardize to canonical UTC
+                parsed_utc = parsed.astimezone(timezone.utc)
 
                 confidence = 0.95 if not is_ambiguous else 0.65
                 return ExtractionResult(
-                    deadline=parsed,
+                    deadline=parsed_utc,
                     original_text=window.strip(),
                     confidence_score=confidence,
                     is_ambiguous=is_ambiguous,
@@ -169,11 +179,17 @@ def extract_deadline_details(
                     is_ambiguous = True
 
                 parsed = dateparser.parse(candidate_raw, fuzzy=True, default=reference_time)
+                if not time_match:
+                    parsed = parsed.replace(hour=23, minute=59, second=0, microsecond=0)
                 if parsed.tzinfo is None:
-                    parsed = parsed.replace(tzinfo=timezone.utc)
+                    if reference_time and reference_time.tzinfo:
+                        parsed = parsed.replace(tzinfo=reference_time.tzinfo)
+                    else:
+                        parsed = parsed.replace(tzinfo=timezone.utc)
+                parsed_utc = parsed.astimezone(timezone.utc)
                 confidence = 0.75 if not is_ambiguous else 0.50
                 return ExtractionResult(
-                    deadline=parsed,
+                    deadline=parsed_utc,
                     original_text=window.strip(),
                     confidence_score=confidence,
                     is_ambiguous=is_ambiguous,
@@ -188,9 +204,13 @@ def extract_deadline_details(
         if f"due {phrase}" in lowered or f"by {phrase}" in lowered or f"before {phrase}" in lowered:
             parsed = fn(reference_time)
             if parsed.tzinfo is None:
-                parsed = parsed.replace(tzinfo=timezone.utc)
+                if reference_time and reference_time.tzinfo:
+                    parsed = parsed.replace(tzinfo=reference_time.tzinfo)
+                else:
+                    parsed = parsed.replace(tzinfo=timezone.utc)
+            parsed_utc = parsed.astimezone(timezone.utc)
             return ExtractionResult(
-                deadline=parsed,
+                deadline=parsed_utc,
                 original_text=phrase,
                 confidence_score=0.80,
                 is_ambiguous=False,
@@ -204,10 +224,16 @@ def extract_deadline_details(
         candidate_raw = bare_match.group(0)
         try:
             parsed = dateparser.parse(candidate_raw, fuzzy=True, default=reference_time)
+            if not _TIME_RE.search(window):
+                parsed = parsed.replace(hour=23, minute=59, second=0, microsecond=0)
             if parsed.tzinfo is None:
-                parsed = parsed.replace(tzinfo=timezone.utc)
+                if reference_time and reference_time.tzinfo:
+                    parsed = parsed.replace(tzinfo=reference_time.tzinfo)
+                else:
+                    parsed = parsed.replace(tzinfo=timezone.utc)
+            parsed_utc = parsed.astimezone(timezone.utc)
             return ExtractionResult(
-                deadline=parsed,
+                deadline=parsed_utc,
                 original_text=window.strip(),
                 confidence_score=0.35,  # Low confidence: bare date
                 is_ambiguous=True,

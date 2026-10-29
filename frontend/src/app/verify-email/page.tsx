@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { CheckCircle2, AlertCircle, Mail, ArrowRight } from "lucide-react";
@@ -19,6 +19,7 @@ function VerifyEmailForm() {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const verificationAttempted = useRef(false);
 
   const handleVerify = async (tokenToUse?: string) => {
     const activeToken = tokenToUse || token;
@@ -30,15 +31,19 @@ function VerifyEmailForm() {
     try {
       await api.verifyEmail(activeToken);
       setSuccess(true);
+      setError(null);
     } catch (err: any) {
-      setError(err.detail || "Invalid or expired verification token.");
+      if (!success) {
+        setError(err.detail || "Invalid or expired verification token.");
+      }
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    if (tokenParam) {
+    if (tokenParam && !verificationAttempted.current) {
+      verificationAttempted.current = true;
       handleVerify(tokenParam);
     }
   }, [tokenParam]);
@@ -66,7 +71,7 @@ function VerifyEmailForm() {
       </CardHeader>
 
       <CardContent className="space-y-4">
-        {error && (
+        {error && !success && (
           <div className="flex items-center gap-2 p-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg">
             <AlertCircle className="h-4 w-4 shrink-0" />
             <span>{error}</span>

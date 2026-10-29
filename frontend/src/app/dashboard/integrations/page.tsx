@@ -144,6 +144,30 @@ export default function IntegrationsPage() {
     }
   };
 
+  const getSyncStatusText = (c: GmailConnection) => {
+    if (!c.active) return "Paused";
+    if (c.last_sync_status && c.last_sync_status.startsWith("failed")) {
+      return "Sync issue encountered";
+    }
+    if (c.last_sync_at) {
+      return `Synchronized (Last checked: ${formatDate(c.last_sync_at)})`;
+    }
+    return "Monitoring (Polling active)";
+  };
+
+  const getSyncBadge = (c: GmailConnection) => {
+    if (!c.active) {
+      return <Badge variant="secondary">Paused</Badge>;
+    }
+    if (c.last_sync_status && c.last_sync_status.startsWith("failed")) {
+      return <Badge variant="destructive">Sync Issue</Badge>;
+    }
+    if (c.last_sync_at) {
+      return <Badge variant="success">Synchronized</Badge>;
+    }
+    return <Badge variant="success">Active</Badge>;
+  };
+
   return (
     <div className="flex-1 flex flex-col">
       <Header
@@ -203,18 +227,23 @@ export default function IntegrationsPage() {
                         <Mail className="h-5 w-5" />
                       </div>
                       <div>
-                        <p className="text-sm font-semibold text-slate-900">{c.email}</p>
-                        <p className="text-xs text-slate-500">
-                          Status: {c.active ? "Synchronizing" : "Inactive"} • Connected:{" "}
-                          {formatDate(c.created_at)}
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-semibold text-slate-900">{c.email}</p>
+                          {c.label && (
+                            <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-medium">
+                              {c.label}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          Status: <span className="font-medium text-slate-700">{getSyncStatusText(c)}</span>
+                          {" • "}Connected: {formatDate(c.created_at)}
                         </p>
                       </div>
                     </div>
 
                     <div className="flex items-center gap-3">
-                      <Badge variant={c.active ? "success" : "secondary"}>
-                        {c.active ? "Active" : "Paused"}
-                      </Badge>
+                      {getSyncBadge(c)}
                       <Button
                         variant="outline"
                         size="sm"

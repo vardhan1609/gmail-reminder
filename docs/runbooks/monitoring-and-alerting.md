@@ -60,3 +60,4 @@ grep '"level": "ERROR"' /opt/gmail-reminder/logs/app.log | jq .
 # Monitor real-time audit trail
 docker exec gmail-reminder-backend tail -f logs/app.log
 ```
+

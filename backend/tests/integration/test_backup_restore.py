@@ -51,3 +51,4 @@ def test_sqlite_backup_and_restore_cycle(tmp_path: Path):
     restored_rows = conn.cursor().execute("SELECT note FROM mock_data ORDER BY id;").fetchall()
     conn.close()
     assert restored_rows == [("original_data_1",), ("original_data_2",)]
+

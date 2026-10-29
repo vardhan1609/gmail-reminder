@@ -3,7 +3,7 @@
 SETLOCAL EnableDelayedExpansion
 
 echo ===================================================
-echo   Gmail Reminder - Open Source Project Setup (Windows)
+echo   Gmail Reminder - Project Setup (Windows)
 echo ===================================================
 echo.
 

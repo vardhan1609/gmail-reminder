@@ -15,11 +15,15 @@ from app.utils.logger import get_logger
 logger = get_logger(__name__)
 
 
-def _llm_disambiguate_deadline(subject: str, body: str) -> Optional[ExtractionResult]:
+def _llm_disambiguate_deadline(
+    subject: str, body: str, reference_time: Optional[datetime] = None
+) -> Optional[ExtractionResult]:
     from app.services.llm import llm_complete
 
+    ref_str = reference_time.isoformat() if reference_time else "now"
     prompt = (
         "Extract the single most important submission deadline or payment due date from this email.\n"
+        f"The reference / current timestamp for relative dates (e.g. today, tomorrow) is: {ref_str}.\n"
         "If there is NO clear deadline, or if the date is merely an event date or appointment date, "
         "indicate that in the response.\n\n"
         "Respond ONLY with valid JSON in this exact structure:\n"
@@ -40,9 +44,13 @@ def _llm_disambiguate_deadline(subject: str, body: str) -> Optional[ExtractionRe
         if data.get("has_deadline") and data.get("deadline_iso"):
             dt = datetime.fromisoformat(data["deadline_iso"])
             if dt.tzinfo is None:
-                dt = dt.replace(tzinfo=timezone.utc)
+                if reference_time and reference_time.tzinfo:
+                    dt = dt.replace(tzinfo=reference_time.tzinfo)
+                else:
+                    dt = dt.replace(tzinfo=timezone.utc)
+            dt_utc = dt.astimezone(timezone.utc)
             return ExtractionResult(
-                deadline=dt,
+                deadline=dt_utc,
                 original_text=data.get("snippet", ""),
                 confidence_score=float(data.get("confidence", 0.8)),
                 is_ambiguous=bool(data.get("is_ambiguous", False)),
@@ -53,20 +61,24 @@ def _llm_disambiguate_deadline(subject: str, body: str) -> Optional[ExtractionRe
     return None
 
 
-def extract_deadline(subject: str, body: str) -> Optional[datetime]:
+def extract_deadline(
+    subject: str, body: str, reference_time: Optional[datetime] = None
+) -> Optional[datetime]:
     """Compatibility function returning datetime or None."""
-    res = get_deadline_extraction(subject, body)
+    res = get_deadline_extraction(subject, body, reference_time=reference_time)
     if res.confidence_score >= 0.60 and not res.is_ambiguous and res.date_type == "submission_deadline":
         return res.deadline
     return None
 
 
-def get_deadline_extraction(subject: str, body: str) -> ExtractionResult:
+def get_deadline_extraction(
+    subject: str, body: str, reference_time: Optional[datetime] = None
+) -> ExtractionResult:
     """Full extraction with confidence score and ambiguity detection."""
     from app.services.llm import llm_is_enabled
 
     full_text = f"{subject}\n{body}"
-    res = extract_deadline_details(full_text)
+    res = extract_deadline_details(full_text, reference_time=reference_time)
 
     # If confident match found
     if res.confidence_score >= 0.85 and not res.is_ambiguous:
@@ -75,7 +87,7 @@ def get_deadline_extraction(subject: str, body: str) -> ExtractionResult:
     # If ambiguous or low confidence, try LLM fallback if configured
     if llm_is_enabled():
         logger.info("Attempting LLM disambiguation for %r", subject)
-        llm_res = _llm_disambiguate_deadline(subject, body)
+        llm_res = _llm_disambiguate_deadline(subject, body, reference_time=reference_time)
         if llm_res:
             return llm_res
 

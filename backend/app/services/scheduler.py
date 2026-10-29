@@ -113,6 +113,11 @@ def _poll_all_accounts(db):
         email_addr = account.get("email", "")
         token_path = account.get("token_path", "")
         user_id = account.get("user_id")
+
+        if not token_path or not os.path.isfile(token_path):
+            logger.warning("Account %s skipped: token file missing or invalid (%s)", email_addr, token_path)
+            continue
+
         logger.info("Synchronizing account: %s", email_addr)
 
         try:
@@ -150,6 +155,16 @@ def _poll_all_accounts(db):
                     "last_sync_status": "success",
                 })
 
+            if hasattr(db, "gmail_connections"):
+                db.gmail_connections.update_one(
+                    {"email": email_addr},
+                    {"$set": {
+                        "last_sync_at": now,
+                        "last_sync_status": "idle",
+                        "history_id": new_history_id,
+                    }}
+                )
+
         except Exception as exc:
             logger.error("Failed to sync account %s: %s", email_addr, exc)
             db.sync_states.update_one(
@@ -157,6 +172,11 @@ def _poll_all_accounts(db):
                 {"$set": {"last_sync_status": f"failed: {str(exc)[:100]}"}},
                 upsert=True,
             )
+            if hasattr(db, "gmail_connections"):
+                db.gmail_connections.update_one(
+                    {"email": email_addr},
+                    {"$set": {"last_sync_status": f"failed: {str(exc)[:100]}"}},
+                )
 
 
 def _process_email(db, account_id: str, raw_email: Dict[str, Any], user_id: Optional[str] = None):
@@ -198,8 +218,9 @@ def _process_email(db, account_id: str, raw_email: Dict[str, Any], user_id: Opti
     # 4. Classification (never discards email, defaults to Other)
     category = classify_email(subject, body_text)
 
-    # 5. Deadline and date extraction
-    extraction = get_deadline_extraction(subject, body_text)
+    # 5. Deadline and date extraction (relative to email's received time and location timezone)
+    ref_time = raw_email.get("orig_received_at") or raw_email.get("received_at") or received_at
+    extraction = get_deadline_extraction(subject, body_text, reference_time=ref_time)
     deadline = extraction.deadline
     confidence = extraction.confidence_score
     ambiguous = extraction.is_ambiguous
@@ -272,11 +293,27 @@ def _process_email(db, account_id: str, raw_email: Dict[str, Any], user_id: Opti
                 if scheduled_time <= datetime.now(timezone.utc):
                     continue  # already in the past
 
+                # Format dual timezone (email/location timezone and UTC)
+                tz_offset = raw_email.get("timezone_offset") or ""
+                tz_name = raw_email.get("email_timezone") or "Local"
+                local_deadline = deadline
+                if tz_offset:
+                    try:
+                        hours = int(tz_offset[:3])
+                        mins = int(tz_offset[0] + tz_offset[3:])
+                        email_tz = timezone(timedelta(hours=hours, minutes=mins))
+                        local_deadline = deadline.astimezone(email_tz)
+                    except Exception:
+                        pass
+                local_str = local_deadline.strftime("%Y-%m-%d %I:%M %p")
+                utc_str = deadline.strftime("%Y-%m-%d %I:%M %p UTC")
+                deadline_display = f"{local_str} ({tz_name}) • {utc_str}" if tz_name != "UTC" else utc_str
+
                 reminder_message = (
                     f"⏰ *{category} Deadline Reminder*\n\n"
                     f"*Subject:* {subject}\n"
                     f"*From:* {sender}\n"
-                    f"*Deadline:* {deadline.strftime('%Y-%m-%d %I:%M %p UTC')}\n"
+                    f"*Deadline:* {deadline_display}\n"
                     f"⏳ *Due in:* {offset // 60} hours\n\n"
                     f"🔗 [Open Email](https://mail.google.com/mail/u/0/#inbox/{gmail_id})"
                 )

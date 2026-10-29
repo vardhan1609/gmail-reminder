@@ -20,7 +20,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog } from "@/components/ui/dialog";
 import { api, EmailRecord } from "@/lib/api";
-import { formatDate } from "@/lib/utils";
+import { formatDate, formatDualDate } from "@/lib/utils";
 
 const CATEGORIES = [
   "All Categories",
@@ -189,16 +189,26 @@ export default function EmailsPage() {
                         </td>
                         <td className="py-3.5 px-4 text-xs">
                           {e.extracted_deadline ? (
-                            <span className="flex items-center gap-1 text-emerald-700 font-medium">
-                              <Calendar className="h-3.5 w-3.5 text-emerald-600" />
-                              {formatDate(e.extracted_deadline)}
-                            </span>
+                            <div>
+                              <span className="flex items-center gap-1 text-emerald-700 font-medium">
+                                <Calendar className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                                {formatDualDate(e.extracted_deadline)?.local || formatDate(e.extracted_deadline)}
+                              </span>
+                              <span className="text-[10px] text-slate-400 font-mono block pl-4.5">
+                                {formatDualDate(e.extracted_deadline)?.utcTime || ""}
+                              </span>
+                            </div>
                           ) : (
                             <span className="text-slate-400">—</span>
                           )}
                         </td>
-                        <td className="py-3.5 px-4 text-xs text-slate-500">
-                          {formatDate(e.received_at || e.created_at)}
+                        <td className="py-3.5 px-4 text-xs">
+                          <span className="text-slate-700 font-medium block">
+                            {formatDualDate(e.received_at || e.created_at)?.local || formatDate(e.received_at || e.created_at)}
+                          </span>
+                          <span className="text-[10px] text-slate-400 font-mono block">
+                            {formatDualDate(e.received_at || e.created_at)?.utcTime || ""}
+                          </span>
                         </td>
                         <td className="py-3.5 px-6 text-right">
                           <Button
@@ -266,14 +276,20 @@ export default function EmailsPage() {
               <div>
                 <p className="text-slate-500 font-semibold">Received At</p>
                 <p className="text-slate-900 font-medium">
-                  {formatDate(selectedEmail.received_at || selectedEmail.created_at)}
+                  {formatDualDate(selectedEmail.received_at || selectedEmail.created_at)?.local || formatDate(selectedEmail.received_at || selectedEmail.created_at)}
+                </p>
+                <p className="text-[11px] text-slate-500 font-mono mt-0.5">
+                  {formatDualDate(selectedEmail.received_at || selectedEmail.created_at)?.utc || ""}
                 </p>
               </div>
               {selectedEmail.extracted_deadline && (
                 <div>
                   <p className="text-slate-500 font-semibold">Extracted Deadline</p>
                   <p className="text-emerald-700 font-medium">
-                    {formatDate(selectedEmail.extracted_deadline)}
+                    {formatDualDate(selectedEmail.extracted_deadline)?.local || formatDate(selectedEmail.extracted_deadline)}
+                  </p>
+                  <p className="text-[11px] text-slate-500 font-mono mt-0.5">
+                    {formatDualDate(selectedEmail.extracted_deadline)?.utc || ""}
                   </p>
                 </div>
               )}

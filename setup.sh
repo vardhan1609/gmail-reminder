@@ -2,7 +2,7 @@
 # Setup script for Gmail Reminder on Unix/macOS systems
 
 echo "==================================================="
-echo "  Gmail Reminder - Open Source Project Setup"
+echo "  Gmail Reminder - Project Setup"
 echo "==================================================="
 echo
 

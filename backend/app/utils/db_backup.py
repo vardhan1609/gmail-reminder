@@ -102,3 +102,4 @@ def restore_backup(backup_file_path: str, target_db_path: Optional[str] = None) 
             return False, str(exc)
 
     return False, "Unsupported database dialect for restore"
+

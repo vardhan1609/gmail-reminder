@@ -34,6 +34,48 @@ def build_gmail_link(gmail_message_id: str) -> str:
     return f"https://mail.google.com/mail/u/0/#inbox/{gmail_message_id}"
 
 
+def format_dual_time_string(
+    dt_val: Any,
+    email_tz_name: Optional[str] = None,
+    tz_offset: Optional[str] = None,
+) -> str:
+    """Formats datetime with both location/email timezone and UTC."""
+    if not dt_val:
+        return ""
+    if isinstance(dt_val, str):
+        try:
+            from dateutil import parser as dtparser
+            dt = dtparser.parse(dt_val)
+        except Exception:
+            return dt_val
+    elif isinstance(dt_val, datetime):
+        dt = dt_val
+    else:
+        return str(dt_val)
+
+    from datetime import timedelta
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    utc_dt = dt.astimezone(timezone.utc)
+    utc_str = utc_dt.strftime("%b %d, %Y, %I:%M %p UTC")
+
+    local_dt = utc_dt
+    tz_label = email_tz_name or "Local"
+    if tz_offset:
+        try:
+            hours = int(tz_offset[:3])
+            mins = int(tz_offset[0] + tz_offset[3:])
+            email_tz = timezone(timedelta(hours=hours, minutes=mins))
+            local_dt = utc_dt.astimezone(email_tz)
+        except Exception:
+            pass
+
+    local_str = local_dt.strftime("%b %d, %Y, %I:%M %p")
+    if tz_label and tz_label != "UTC":
+        return f"{local_str} ({tz_label}) • {utc_str}"
+    return f"{local_str} • {utc_str}"
+
+
 def format_email_notification(
     email_data: Dict[str, Any],
     notification_type: str = "immediate",
@@ -51,7 +93,10 @@ def format_email_notification(
     category = email_data.get("category", "Other")
     gmail_id = email_data.get("gmail_message_id") or email_data.get("gmail_id") or ""
     link = build_gmail_link(gmail_id) if gmail_id else ""
-    deadline_str = email_data.get("extracted_deadline") or email_data.get("deadline")
+    raw_deadline = email_data.get("extracted_deadline") or email_data.get("deadline")
+    email_tz = email_data.get("email_timezone")
+    tz_offset = email_data.get("timezone_offset")
+    deadline_str = format_dual_time_string(raw_deadline, email_tz, tz_offset) if raw_deadline else ""
 
     if privacy_mode:
         msg_parts = [

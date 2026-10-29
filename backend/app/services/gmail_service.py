@@ -299,15 +299,24 @@ def get_message(token_path: str, message_id: str) -> Optional[Dict[str, Any]]:
 
     # Parse received timestamp
     received_date = None
+    email_tz_name = "UTC"
+    email_tz_offset = "+0000"
     if headers.get("date"):
         try:
             from dateutil import parser as dtparser
             parsed_dt = dtparser.parse(headers["date"])
-            if parsed_dt.tzinfo is None:
-                parsed_dt = parsed_dt.replace(tzinfo=timezone.utc)
-            received_date = parsed_dt
+            if parsed_dt.tzinfo is not None:
+                email_tz_offset = parsed_dt.strftime("%z")
+                email_tz_name = parsed_dt.tzname() or (f"UTC{email_tz_offset[:3]}:{email_tz_offset[3:]}" if email_tz_offset else "UTC")
+                received_date = parsed_dt.astimezone(timezone.utc)
+            else:
+                received_date = parsed_dt.replace(tzinfo=timezone.utc)
+                email_tz_name = "UTC"
+                email_tz_offset = "+0000"
         except Exception:
             received_date = datetime.now(timezone.utc)
+            email_tz_name = "UTC"
+            email_tz_offset = "+0000"
 
     # Extract labels
     label_ids = msg.get("labelIds", [])
@@ -320,6 +329,8 @@ def get_message(token_path: str, message_id: str) -> Optional[Dict[str, Any]]:
         "recipients": headers.get("to", ""),
         "subject": headers.get("subject", "(no subject)"),
         "received_at": received_date,
+        "email_timezone": email_tz_name,
+        "timezone_offset": email_tz_offset,
         "plain_text": plain,
         "html": html,
         "attachments": attachments,
