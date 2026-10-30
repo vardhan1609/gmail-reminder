@@ -12,7 +12,7 @@ def test_cross_tenant_data_isolation(client: TestClient):
     # 1. Register User A
     client.post(
         "/api/v1/auth/register",
-        json={"email": "usera@example.com", "password": "UserAPassword123!", "full_name": "User A"},
+        json={"email": "usera@example.com", "password": "UserAPassword123!", "full_name": "User A", "terms_accepted": true},
     )
     login_a = client.post("/api/v1/auth/login", json={"email": "usera@example.com", "password": "UserAPassword123!"})
     cookies_a = login_a.cookies
@@ -20,7 +20,7 @@ def test_cross_tenant_data_isolation(client: TestClient):
     # 2. Register User B
     client.post(
         "/api/v1/auth/register",
-        json={"email": "userb@example.com", "password": "UserBPassword123!", "full_name": "User B"},
+        json={"email": "userb@example.com", "password": "UserBPassword123!", "full_name": "User B", "terms_accepted": true},
     )
     login_b = client.post("/api/v1/auth/login", json={"email": "userb@example.com", "password": "UserBPassword123!"})
     cookies_b = login_b.cookies
