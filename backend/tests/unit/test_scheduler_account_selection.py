@@ -23,3 +23,20 @@ def test_poll_all_accounts_processes_only_requested_user_and_oauth_connection(mo
     scheduler._poll_all_accounts(db,"user-1","one@example.com")
     assert calls==[str(token_file)]
     assert any(filters.get("user_id")=="user-1" for filters,_update,_upsert in connections.updated)
+
+
+def test_gmail_connection_adapter_keeps_token_path_for_scheduler():
+    from app.models.db_models import GmailConnectionModel
+
+    connection = GmailConnectionModel(
+        id="connection-id",
+        user_id="user-1",
+        email="mailbox@example.com",
+        token_path="/secure/tokens/gmail.json",
+        active=True,
+        history_id="history-123",
+    )
+
+    serialized = connection.to_dict()
+    assert serialized["token_path"] == "/secure/tokens/gmail.json"
+    assert serialized["history_id"] == "history-123"
