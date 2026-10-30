@@ -34,7 +34,7 @@ Replace every `vuvg.in` value with your actual domain. Do not commit `.env.produ
 ## 4. Configure Google OAuth
 
 In Google Cloud Console, add the production callback URI exactly as configured in `GOOGLE_REDIRECT_URI`:
-`https://api.vuvg.in/auth/google/callback`
+`https://api.vuvg.in/auth/google/callback`\n\nFor Google account sign-in (separate from Gmail mailbox access), also register this authorized redirect URI:\n`https://api.vuvg.in/api/v1/auth/google-sso/callback`\n\nSet `GOOGLE_SSO_REDIRECT_URI` to that exact value in `.env.production`. Both redirect URIs can be registered on the same Google OAuth web client.
 
 Add the frontend domain to the authorized JavaScript origins if your OAuth client configuration requires it. Ensure the consent screen and Gmail scopes have the verification status appropriate for your intended users.
 
