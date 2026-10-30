@@ -50,6 +50,7 @@ def _register_and_login_user(client, email="ws_user@example.com", password="Vali
         "email": email,
         "password": password,
         "full_name": "WebSocket Test User",
+            "terms_accepted": true,
     })
     assert reg.status_code in (200, 201), reg.text
     user_id = reg.json().get("user_id") or reg.json().get("user", {}).get("id")
