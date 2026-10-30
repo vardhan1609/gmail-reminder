@@ -1,0 +1,86 @@
+# Deploy Gmail Reminder to a DigitalOcean Droplet
+
+This guide uses the repository's existing FastAPI, Next.js, PostgreSQL, and embedded WhatsApp bridge. It adds a separate production Compose file; the existing development `docker-compose.yml` is left unchanged.
+
+## 1. Create the Droplet
+
+Recommended starting point: Ubuntu 24.04 LTS, 4 vCPU, 8 GB RAM, and at least 100 GB SSD. The WhatsApp Web bridge uses Chromium and can be memory-intensive. A smaller Droplet is suitable only for initial testing.
+
+Create DNS A records for `app.yourdomain.com` and `api.yourdomain.com`, both pointing to the Droplet IPv4 address. Allow inbound TCP 22, 80, and 443 in the DigitalOcean firewall. Do not expose PostgreSQL (5432), Redis (if added later), or the API port directly.
+
+## 2. Install Docker
+
+SSH into the Droplet and install Docker Engine plus the Compose plugin using Docker's official Ubuntu instructions:
+https://docs.docker.com/engine/install/ubuntu/
+
+Verify:
+```bash
+docker --version
+docker compose version
+```
+
+## 3. Clone and configure
+
+```bash
+git clone https://github.com/vardhan1609/gmail-reminder.git
+cd gmail-reminder
+cp .env.production.example .env.production
+```
+
+Edit `.env.production`. Set both domains, a unique PostgreSQL password, a strong application secret, a valid Fernet key for `GOOGLE_TOKEN_ENCRYPTION_KEY`, and your provider credentials. Generate random secrets with `openssl rand -hex 32`. Generate the Fernet key using Python's `cryptography.fernet.Fernet.generate_key()`.
+
+Replace every `example.com` value with your actual domain. Do not commit `.env.production`.
+
+## 4. Configure Google OAuth
+
+In Google Cloud Console, add the production callback URI exactly as configured in `GOOGLE_REDIRECT_URI`:
+`https://api.yourdomain.com/auth/google/callback`
+
+Add the frontend domain to the authorized JavaScript origins if your OAuth client configuration requires it. Ensure the consent screen and Gmail scopes have the verification status appropriate for your intended users.
+
+## 5. Build and start
+
+Wait until both DNS records resolve to the Droplet. Then:
+```bash
+docker compose --env-file .env.production -f docker-compose.prod.yml config
+docker compose --env-file .env.production -f docker-compose.prod.yml build
+docker compose --env-file .env.production -f docker-compose.prod.yml up -d postgres
+docker compose --env-file .env.production -f docker-compose.prod.yml run --rm backend alembic upgrade head
+docker compose --env-file .env.production -f docker-compose.prod.yml up -d
+docker compose --env-file .env.production -f docker-compose.prod.yml ps
+```
+
+Caddy obtains and renews TLS certificates automatically. Check logs:
+```bash
+docker compose --env-file .env.production -f docker-compose.prod.yml logs -f caddy backend frontend
+```
+
+Test:
+```bash
+curl -fsS https://api.yourdomain.com/health
+```
+If the health route differs in your deployed application, inspect the FastAPI route list and use its actual health endpoint.
+
+## 6. Important production checks
+
+- Confirm frontend API requests use the public API origin. `NEXT_PUBLIC_API_URL` is a Next.js build-time variable, so changing it requires rebuilding the frontend image.
+- Confirm the API CORS allowlist includes only the production frontend origin.
+- Confirm session cookies are Secure and HttpOnly and that OAuth tokens are encrypted at rest.
+- The production Compose file does not publish PostgreSQL or the FastAPI port to the host.
+- The backend currently starts its scheduler from the application lifecycle. Run only one backend replica until scheduling is moved to a dedicated singleton worker with distributed locking.
+- The WhatsApp Web bridge stores its session in a named Docker volume. Back up that volume securely. Prefer the official Meta Cloud API for a production customer-facing service; the web client is unofficial and can be fragile.
+- Test a new account end-to-end: signup, verification, login, MFA enrollment and challenge, Gmail OAuth, sync, reminder creation, and each notification channel.
+- Configure off-server encrypted PostgreSQL backups and test a restore before relying on the service.
+
+## 7. Updating the deployment
+
+After merging a reviewed change to the deployment branch:
+```bash
+git pull
+docker compose --env-file .env.production -f docker-compose.prod.yml build
+docker compose --env-file .env.production -f docker-compose.prod.yml run --rm backend alembic upgrade head
+docker compose --env-file .env.production -f docker-compose.prod.yml up -d
+docker image prune -f
+```
+
+Do not use `docker compose down -v`: it deletes persistent volumes, including the database.
