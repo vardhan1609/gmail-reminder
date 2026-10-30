@@ -569,7 +569,7 @@ def revoke_all_sessions(
     return {"message": f"Revoked {count} other active session(s)."}
 
 
-// --- Google OpenID Connect sign-in (separate from Gmail mailbox authorization) ---
+# --- Google OpenID Connect sign-in (separate from Gmail mailbox authorization) ---
 
 GOOGLE_SSO_SCOPES = ["openid", "email", "profile"]
 GOOGLE_SSO_STATE_COOKIE = "google_sso_state"
