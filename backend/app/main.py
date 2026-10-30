@@ -30,6 +30,9 @@ def start_whatsapp_bridge():
     if settings.dry_run or settings.whatsapp_provider == "dry_run":
         logger.info("WhatsApp bridge subprocess skipped: DRY_RUN mode enabled")
         return
+    if settings.whatsapp_provider != "webjs":
+        logger.info("WhatsApp bridge subprocess skipped: provider is %s", settings.whatsapp_provider)
+        return
 
     bridge_dir = Path(__file__).resolve().parents[2] / "whatsapp-bridge"
     script_path = bridge_dir / "src" / "index.js"
