@@ -641,8 +641,9 @@ def google_sso_login(
 @router.get("/google-sso/callback")
 def google_sso_callback(
     request: Request,
-    code: str = Query(...),
-    state: str = Query(...),
+    code: Optional[str] = Query(None),
+    state: Optional[str] = Query(None),
+    error: Optional[str] = Query(None),
     db: Session = Depends(get_db_session),
 ):
     """Verify Google OIDC identity, create/find the local user and issue an app session."""
@@ -662,7 +663,7 @@ def google_sso_callback(
             result.delete_cookie(cookie_name, path="/api/v1/auth/google-sso")
         return result
 
-    if not expected_state or not secrets.compare_digest(expected_state, state) or not nonce:
+    if error or not code or not state or not expected_state or not secrets.compare_digest(expected_state, state) or not nonce:
         return finish_redirect("/login?error=google_state_invalid")
 
     try:
