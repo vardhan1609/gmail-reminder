@@ -90,4 +90,3 @@ volumes:
 networks:
   public:
   private:
-    internal: true
