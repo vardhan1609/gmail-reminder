@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     google_client_id: str = ""
     google_client_secret: str = ""
     google_redirect_uri: str = "http://127.0.0.1:8000/auth/google/callback"
+    google_sso_redirect_uri: str = ""
     google_token_encryption_key: str = ""
     gmail_scopes: str = (
         "https://www.googleapis.com/auth/gmail.readonly "

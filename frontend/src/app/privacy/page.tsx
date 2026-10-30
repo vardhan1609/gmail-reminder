@@ -1,0 +1,23 @@
+import Link from "next/link";
+
+export const metadata = {
+  title: "Privacy Policy | Gmail Reminder",
+  description: "How Gmail Reminder handles account, email and integration data.",
+};
+
+const sections = [
+  ["1. Information we handle", "Depending on the features you use, we may process account details such as your name and email address; authentication and security records; Google account identifiers and authorized tokens; email metadata and message content needed for classification and reminders; reminder and notification settings; and the destination details you provide for Telegram or WhatsApp."],
+  ["2. Gmail permissions and use", "Gmail access is not required merely to browse the public pages. When you connect a mailbox, Google displays the permissions requested. We use the granted access to synchronize and process messages for the features you enable, including identifying potential deadlines and preparing reminders. Do not connect a mailbox unless you are authorized to do so."],
+  ["3. How we use information", "We use information to create and secure accounts, authenticate users, connect mailboxes, process messages, generate reminders, deliver notifications you configure, maintain and troubleshoot the service, prevent abuse, and respond to support requests."],
+  ["4. Notifications and third parties", "If you configure a third-party notification channel, the information necessary to deliver the message (which may include reminder text or email-derived details) is sent to that provider. Google, Telegram, WhatsApp/Meta, hosting providers and other integrations process data under their own terms and privacy policies. We do not control their services."],
+  ["5. Storage and security", "We use technical and organizational safeguards intended to protect information, including authenticated sessions and protected storage for integration credentials. No internet service or storage method can be guaranteed completely secure. Access to production data should be limited to authorized operational purposes."],
+  ["6. Retention and deletion", "We retain account, email, reminder and audit information for as long as needed to provide the service, meet legitimate operational needs, resolve disputes or comply with law. You may disconnect Gmail access and request account or data deletion through the support channel published in the application. Backups may persist for a limited period before being overwritten."],
+  ["7. Marketing choices", "Product announcements and promotional emails are optional. The marketing checkbox is not preselected and is not required to register. You can withdraw marketing consent at any time using an unsubscribe mechanism in a marketing email or the support channel. Essential service and security messages may still be sent."],
+  ["8. Your choices", "You can choose whether to connect Gmail, configure notification destinations, and opt in to marketing. You can revoke Google access in your Google Account settings. Depending on applicable law, you may have rights to access, correct, delete or restrict certain personal information."],
+  ["9. Children", "The service is not designed for children under the age required to independently consent to online services in their jurisdiction. Do not create an account if you are not legally permitted to do so."],
+  ["10. Changes and contact", "We may update this policy as the service changes. The current version and effective date will be shown here. For privacy requests or questions, use the support or contact channel published within the application."],
+];
+
+export default function PrivacyPage() {
+  return <main className="min-h-screen bg-background px-4 py-12 text-foreground"><article className="mx-auto max-w-3xl space-y-8"><header className="space-y-3"><Link href="/signup" className="text-sm text-primary hover:underline">← Back to sign up</Link><p className="text-sm font-semibold uppercase tracking-wider text-primary">Gmail Reminder</p><h1 className="text-3xl font-bold tracking-tight">Privacy Policy</h1><p className="text-sm text-muted-foreground">Effective date: 31 October 2026</p><p className="text-muted-foreground">This policy explains what information Gmail Reminder handles and the choices available to you.</p></header>{sections.map(([heading, body]) => <section key={heading} className="space-y-2"><h2 className="text-lg font-semibold">{heading}</h2><p className="leading-7 text-muted-foreground">{body}</p></section>)}<footer className="border-t border-border pt-6 text-sm text-muted-foreground"><Link href="/terms" className="text-primary hover:underline">Read the Terms of Service</Link></footer></article></main>;
+}

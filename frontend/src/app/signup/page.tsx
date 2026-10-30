@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Mail, Check, X, AlertCircle } from "lucide-react";
-import { api } from "@/lib/api";
+import { api, getApiBase } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,6 +15,8 @@ export default function SignupPage() {
   const [fullName, setFullName] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [marketingOptIn, setMarketingOptIn] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -26,7 +28,7 @@ export default function SignupPage() {
   const hasSpecial = /[\W_]/.test(password);
   const passwordsMatch = password.length > 0 && password === confirmPassword;
   const isFormValid =
-    hasMinLength && hasUppercase && hasLowercase && hasNumber && hasSpecial && passwordsMatch;
+    hasMinLength && hasUppercase && hasLowercase && hasNumber && hasSpecial && passwordsMatch && termsAccepted;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,6 +42,8 @@ export default function SignupPage() {
         email,
         password,
         full_name: fullName,
+        terms_accepted: termsAccepted,
+        marketing_opt_in: marketingOptIn,
       });
 
       // Redirect to verification view
@@ -49,6 +53,15 @@ export default function SignupPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const startGoogleSignup = () => {
+    const params = new URLSearchParams({
+      intent: "signup",
+      terms_accepted: String(termsAccepted),
+      marketing_opt_in: String(marketingOptIn),
+    });
+    window.location.assign(`${getApiBase()}/auth/google-sso/login?${params.toString()}`);
   };
 
   return (
@@ -142,11 +155,26 @@ export default function SignupPage() {
                 </span>
               </div>
             </div>
+
+            <div className="space-y-3 rounded-lg border border-border p-3 text-sm">
+              <label className="flex items-start gap-2 cursor-pointer">
+                <input type="checkbox" className="mt-1 h-4 w-4 accent-primary" checked={termsAccepted} onChange={(e) => setTermsAccepted(e.target.checked)} required />
+                <span>I agree to the <Link href="/terms" target="_blank" className="font-semibold text-primary underline">Terms of Service</Link> and acknowledge the <Link href="/privacy" target="_blank" className="font-semibold text-primary underline">Privacy Policy</Link>. This is required to create an account.</span>
+              </label>
+              <label className="flex items-start gap-2 cursor-pointer">
+                <input type="checkbox" className="mt-1 h-4 w-4 accent-primary" checked={marketingOptIn} onChange={(e) => setMarketingOptIn(e.target.checked)} />
+                <span>Send me occasional product updates, feature announcements and tips by email. Optional; I can unsubscribe at any time.</span>
+              </label>
+            </div>
           </CardContent>
 
           <CardFooter className="flex flex-col gap-3">
             <Button type="submit" className="w-full" loading={loading} disabled={!isFormValid}>
               Create Account
+            </Button>
+            <div className="flex items-center gap-3 w-full text-xs text-muted-foreground"><span className="h-px flex-1 bg-border" />OR<span className="h-px flex-1 bg-border" /></div>
+            <Button type="button" variant="outline" className="w-full" disabled={!termsAccepted} onClick={startGoogleSignup}>
+              <span className="mr-2 font-bold text-base">G</span> Sign up with Google
             </Button>
 
             <p className="text-center text-xs text-muted-foreground">
