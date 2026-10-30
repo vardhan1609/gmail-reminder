@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Inbox,
   Search,
@@ -73,11 +73,19 @@ export default function EmailsPage() {
     }
   };
 
-  const { subscribe } = useRealtime();
+  const { subscribe, connectionState } = useRealtime();
+  const hasConnectedRef = useRef(false);
 
   useEffect(() => {
     fetchEmails();
   }, [page, selectedCategory, submittedSearch]);
+
+  useEffect(() => {
+    if (connectionState === "connected") {
+      if (hasConnectedRef.current) fetchEmails();
+      hasConnectedRef.current = true;
+    }
+  }, [connectionState]);
 
   useEffect(() => {
     const unsubEmail = subscribe("email.received", (data: any) => {

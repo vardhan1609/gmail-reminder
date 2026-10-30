@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   Inbox,
@@ -59,11 +59,19 @@ export default function DashboardOverviewPage() {
     }
   };
 
-  const { subscribe } = useRealtime();
+  const { subscribe, connectionState } = useRealtime();
+  const hasConnectedRef = useRef(false);
 
   useEffect(() => {
     loadDashboardData();
   }, []);
+
+  useEffect(() => {
+    if (connectionState === "connected") {
+      if (hasConnectedRef.current) loadDashboardData();
+      hasConnectedRef.current = true;
+    }
+  }, [connectionState]);
 
   useEffect(() => {
     // 1. Listen for new incoming emails
