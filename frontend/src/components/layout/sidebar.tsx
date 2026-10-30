@@ -1,95 +1,17 @@
 "use client";
-
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  Inbox,
-  Clock,
-  Bell,
-  Plug,
-  Sliders,
-  ShieldCheck,
-  Smartphone,
-  LayoutDashboard,
-  LogOut,
-  Mail,
-} from "lucide-react";
+import { Inbox, Clock, Bell, Plug, Sliders, ShieldCheck, Smartphone, LayoutDashboard, LogOut, Mail } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
-
 const NAV_ITEMS = [
-  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { label: "Emails", href: "/dashboard/emails", icon: Inbox },
-  { label: "Reminders", href: "/dashboard/reminders", icon: Clock },
-  { label: "Notifications", href: "/dashboard/notifications", icon: Bell },
-  { label: "Integrations", href: "/dashboard/integrations", icon: Plug },
-  { label: "Notification Rules", href: "/dashboard/settings", icon: Sliders },
-  { label: "Security & MFA", href: "/dashboard/security", icon: ShieldCheck },
-  { label: "Active Sessions", href: "/dashboard/sessions", icon: Smartphone },
+{label:"Dashboard",href:"/dashboard",icon:LayoutDashboard},{label:"Emails",href:"/dashboard/emails",icon:Inbox},{label:"Reminders",href:"/dashboard/reminders",icon:Clock},{label:"Notifications",href:"/dashboard/notifications",icon:Bell},{label:"Integrations",href:"/dashboard/integrations",icon:Plug},{label:"Notification Rules",href:"/dashboard/settings",icon:Sliders},{label:"Security & MFA",href:"/dashboard/security",icon:ShieldCheck},{label:"Active Sessions",href:"/dashboard/sessions",icon:Smartphone}
 ];
-
-export function Sidebar() {
-  const pathname = usePathname();
-  const { user, logout } = useAuth();
-
-  return (
-    <aside className="w-64 border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] flex flex-col h-screen sticky top-0 transition-colors">
-      {/* Brand */}
-      <div className="h-16 flex items-center px-6 border-b border-slate-200 dark:border-slate-800 gap-3">
-        <div className="h-9 w-9 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold shadow">
-          <Mail className="h-5 w-5" />
-        </div>
-        <div>
-          <h1 className="font-bold text-slate-900 dark:text-slate-100 leading-tight">MailNotifier</h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400">Multi-Channel Alerts</p>
-        </div>
-      </div>
-
-      {/* Nav items */}
-      <nav className="flex-1 px-4 py-4 space-y-1 overflow-y-auto">
-        {NAV_ITEMS.map((item) => {
-          const Icon = item.icon;
-          const isActive = pathname === item.href;
-          return (
-            <a
-              key={item.href}
-              href={item.href}
-              className={cn(
-                "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
-                isActive
-                  ? "bg-blue-50 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400 font-semibold"
-                  : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/60 hover:text-slate-900 dark:hover:text-slate-100"
-              )}
-            >
-              <Icon className={cn("h-4 w-4", isActive ? "text-blue-600 dark:text-blue-400" : "text-slate-500 dark:text-slate-400")} />
-              {item.label}
-            </a>
-          );
-        })}
-      </nav>
-
-      {/* User profile & Logout */}
-      <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-[#0E1524]">
-        <div className="flex items-center gap-3 mb-3">
-          <div className="h-8 w-8 rounded-full bg-blue-100 dark:bg-blue-900/60 text-blue-600 dark:text-blue-300 flex items-center justify-center font-bold text-sm">
-            {user?.full_name ? user.full_name[0].toUpperCase() : user?.email[0].toUpperCase() || "U"}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-xs font-semibold text-slate-900 dark:text-slate-100 truncate">
-              {user?.full_name || "User"}
-            </p>
-            <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{user?.email}</p>
-          </div>
-        </div>
-
-        <button
-          onClick={logout}
-          className="w-full flex items-center justify-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800/80 transition-colors"
-        >
-          <LogOut className="h-3.5 w-3.5" />
-          Sign Out
-        </button>
-      </div>
-    </aside>
-  );
+export function Sidebar(){
+const pathname=usePathname(); const {user,logout}=useAuth();
+return <aside className="flex w-full shrink-0 flex-col border-b border-slate-200 bg-white transition-colors dark:border-slate-800 dark:bg-[#111827] md:sticky md:top-0 md:h-screen md:w-64 md:border-b-0 md:border-r">
+<div className="flex h-14 shrink-0 items-center gap-3 border-b border-slate-200 px-4 dark:border-slate-800 md:h-16 md:px-6"><div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-600 font-bold text-white shadow"><Mail className="h-5 w-5"/></div><div className="min-w-0"><h1 className="font-bold leading-tight text-slate-900 dark:text-slate-100">MailNotifier</h1><p className="text-xs text-slate-500 dark:text-slate-400">Multi-Channel Alerts</p></div></div>
+<nav className="flex gap-1 overflow-x-auto px-2 py-2 md:flex-1 md:flex-col md:overflow-x-hidden md:overflow-y-auto md:px-4 md:py-4">{NAV_ITEMS.map(item=>{const Icon=item.icon;const active=pathname===item.href;return <Link key={item.href} href={item.href} aria-current={active?"page":undefined} className={cn("flex shrink-0 items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-xs font-medium transition-colors md:w-full md:gap-3 md:text-sm",active?"bg-blue-50 font-semibold text-blue-600 dark:bg-blue-950/60 dark:text-blue-400":"text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/60 dark:hover:text-slate-100")}><Icon className="h-4 w-4 shrink-0"/>{item.label}</Link>})}</nav>
+<div className="flex shrink-0 items-center gap-3 border-t border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-[#0E1524] md:block md:p-4"><div className="flex min-w-0 flex-1 items-center gap-3 md:mb-3"><div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-100 text-sm font-bold text-blue-600 dark:bg-blue-900/60 dark:text-blue-300">{user?.full_name?user.full_name[0].toUpperCase():user?.email?.[0]?.toUpperCase()||"U"}</div><div className="min-w-0 flex-1"><p className="truncate text-xs font-semibold text-slate-900 dark:text-slate-100">{user?.full_name||"User"}</p><p className="truncate text-xs text-slate-500 dark:text-slate-400">{user?.email}</p></div></div><button onClick={logout} className="flex shrink-0 items-center justify-center gap-2 rounded-md px-3 py-2 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-200 dark:text-slate-300 dark:hover:bg-slate-800/80 md:w-full"><LogOut className="h-3.5 w-3.5"/>Sign Out</button></div>
+</aside>;
 }

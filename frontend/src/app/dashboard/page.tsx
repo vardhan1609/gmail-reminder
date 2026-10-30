@@ -163,7 +163,7 @@ export default function DashboardOverviewPage() {
         description="Live summary of your monitored Gmail inboxes and automated notifications."
       />
 
-      <main className="flex-1 p-8 space-y-8 max-w-7xl mx-auto w-full">
+      <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-8 max-w-7xl mx-auto w-full">
         {error && (
           <div className="flex items-center gap-2 p-4 text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-xl">
             <AlertCircle className="h-5 w-5 shrink-0" />
@@ -241,7 +241,7 @@ export default function DashboardOverviewPage() {
         </div>
 
         {/* Content sections: Recent Emails & Active Reminders */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:p-6 lg:p-8">
           {/* Recent Emails */}
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">

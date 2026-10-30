@@ -47,7 +47,7 @@ export default function NotificationsPage() {
         description="Audit trail of all dispatched WhatsApp and Telegram notifications."
       />
 
-      <main className="flex-1 p-8 space-y-6 max-w-7xl mx-auto w-full">
+      <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto w-full">
         {/* Filters */}
         <div className="flex flex-wrap gap-4 items-center justify-between bg-card p-4 rounded-xl border border-border shadow-sm">
           <div className="flex items-center gap-3">

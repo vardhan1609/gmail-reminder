@@ -242,12 +242,13 @@ export const api = {
     request<{ message: string }>("/auth/sessions/revoke-all", { method: "POST" }),
 
   // Emails
-  getEmails: (params: { limit?: number; skip?: number; category?: string; sender?: string }) => {
+  getEmails: (params: { limit?: number; skip?: number; category?: string; sender?: string; search?: string }) => {
     const q = new URLSearchParams();
     if (params.limit) q.set("limit", String(params.limit));
     if (params.skip) q.set("skip", String(params.skip));
     if (params.category) q.set("category", params.category);
-    if (params.sender) q.set("sender", params.sender);
+    if (params.search) q.set("search", params.search);
+    else if (params.sender) q.set("sender", params.sender);
     return request<{ emails: EmailRecord[]; total: number; limit: number; skip: number }>(
       `/emails?${q.toString()}`
     );

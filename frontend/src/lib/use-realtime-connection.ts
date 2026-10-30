@@ -41,6 +41,10 @@ export function useRealtimeConnection(
   const [connectionState, setConnectionState] =
     useState<WebSocketConnectionState>("disconnected");
   const [lastEvent, setLastEvent] = useState<WebSocketEnvelope | null>(null);
+  const onEventRef = useRef(onEvent);
+  const onReconnectRef = useRef(onReconnect);
+  onEventRef.current = onEvent;
+  onReconnectRef.current = onReconnect;
 
   const socketRef = useRef<WebSocket | null>(null);
   const retryCountRef = useRef(0);
@@ -73,6 +77,7 @@ export function useRealtimeConnection(
 
   const connect = useCallback(() => {
     if (!enabled || typeof window === "undefined") return;
+    if (!navigator.onLine) { setConnectionState("disconnected"); return; }
 
     // Avoid duplicate connections if already open or connecting
     if (
@@ -105,9 +110,9 @@ export function useRealtimeConnection(
         retryCountRef.current = 0;
 
         // If this is a re-connection, trigger the onReconnect callback for state catch-up
-        if (hasEverConnectedRef.current && onReconnect) {
+        if (hasEverConnectedRef.current && onReconnectRef.current) {
           try {
-            onReconnect();
+            onReconnectRef.current();
           } catch (e) {
             console.error("Error in onReconnect callback:", e);
           }
@@ -153,9 +158,9 @@ export function useRealtimeConnection(
           setLastEvent(envelope);
 
           // Global onEvent callback
-          if (onEvent) {
+          if (onEventRef.current) {
             try {
-              onEvent(envelope);
+              onEventRef.current(envelope);
             } catch (err) {
               console.error("Error in onEvent handler:", err);
             }
@@ -189,15 +194,13 @@ export function useRealtimeConnection(
       ws.onclose = (event) => {
         if (!isMountedRef.current) return;
         clearTimers();
-        socketRef.current = null;
-
-        // Code 4401 or 1008 means unauthenticated or policy violation -> stop reconnecting
+        if (socketRef.current === ws) socketRef.current = null;
         if (event.code === 4401 || (event.code === 1008 && event.reason?.includes("MFA"))) {
           setConnectionState("disconnected");
           return;
         }
-
-        setConnectionState("disconnected");
+        if (!navigator.onLine) { setConnectionState("disconnected"); return; }
+        setConnectionState("reconnecting");
 
         // Exponential backoff with jitter (1.0s, 1.5s, 2.25s ... capped at 15s)
         const count = retryCountRef.current;
@@ -219,20 +222,25 @@ export function useRealtimeConnection(
       console.error("Failed to initialize WebSocket:", err);
       setConnectionState("disconnected");
     }
-  }, [enabled, onEvent, onReconnect, clearTimers]);
+  }, [enabled, clearTimers]);
 
   useEffect(() => {
     isMountedRef.current = true;
-    if (enabled) {
-      connect();
-    }
+    const handleOnline = () => { retryCountRef.current = 0; connect(); };
+    const handleOffline = () => {
+      clearTimers();
+      if (socketRef.current) { const socket = socketRef.current; socketRef.current = null; socket.close(1000, "Browser is offline"); }
+      setConnectionState("disconnected");
+    };
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    if (enabled) connect();
     return () => {
       isMountedRef.current = false;
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
       clearTimers();
-      if (socketRef.current) {
-        socketRef.current.close(1000, "Component unmounted");
-        socketRef.current = null;
-      }
+      if (socketRef.current) { socketRef.current.close(1000, "Component unmounted"); socketRef.current = null; }
     };
   }, [enabled, connect, clearTimers]);
 

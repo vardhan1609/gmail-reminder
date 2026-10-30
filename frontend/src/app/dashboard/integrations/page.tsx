@@ -175,7 +175,7 @@ export default function IntegrationsPage() {
         description="Manage your Gmail connections and messaging delivery channels."
       />
 
-      <main className="flex-1 p-8 space-y-8 max-w-7xl mx-auto w-full">
+      <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-8 max-w-7xl mx-auto w-full">
         {error && (
           <div className="flex items-center gap-2 p-4 text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl">
             <AlertCircle className="h-5 w-5 shrink-0" />
