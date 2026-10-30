@@ -114,7 +114,7 @@ export default function RemindersPage() {
         description="Automated deadline reminders scheduled across your notification channels."
       />
 
-      <main className="flex-1 p-8 space-y-6 max-w-7xl mx-auto w-full">
+      <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto w-full">
         {/* Status Filter Tabs */}
         <div className="flex gap-2 p-1 bg-muted/70 rounded-lg w-fit text-xs font-semibold">
           {["all", "pending", "sent", "failed"].map((st) => (

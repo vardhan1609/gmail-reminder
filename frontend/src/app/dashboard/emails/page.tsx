@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Inbox,
   Search,
@@ -46,6 +46,7 @@ export default function EmailsPage() {
 
   // Filters & Pagination
   const [searchTerm, setSearchTerm] = useState("");
+  const [submittedSearch, setSubmittedSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All Categories");
   const [page, setPage] = useState(0);
   const limit = 20;
@@ -61,7 +62,7 @@ export default function EmailsPage() {
         limit,
         skip: page * limit,
         category: selectedCategory === "All Categories" ? undefined : selectedCategory,
-        sender: searchTerm ? searchTerm : undefined,
+        search: submittedSearch || undefined,
       });
       setEmails(res.emails || []);
       setTotal(res.total || 0);
@@ -72,11 +73,19 @@ export default function EmailsPage() {
     }
   };
 
-  const { subscribe } = useRealtime();
+  const { subscribe, connectionState } = useRealtime();
+  const hasConnectedRef = useRef(false);
 
   useEffect(() => {
     fetchEmails();
-  }, [page, selectedCategory]);
+  }, [page, selectedCategory, submittedSearch]);
+
+  useEffect(() => {
+    if (connectionState === "connected") {
+      if (hasConnectedRef.current) fetchEmails();
+      hasConnectedRef.current = true;
+    }
+  }, [connectionState]);
 
   useEffect(() => {
     const unsubEmail = subscribe("email.received", (data: any) => {
@@ -132,12 +141,12 @@ export default function EmailsPage() {
       unsubClassified();
       unsubSync();
     };
-  }, [subscribe, page]);
+  }, [subscribe, page, submittedSearch]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setPage(0);
-    fetchEmails();
+    setSubmittedSearch(searchTerm.trim());
   };
 
   const totalPages = Math.ceil(total / limit);
@@ -149,7 +158,7 @@ export default function EmailsPage() {
         description="Processed emails classified across all 11 categories."
       />
 
-      <main className="flex-1 p-8 space-y-6 max-w-7xl mx-auto w-full">
+      <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto w-full">
         {/* Filter bar */}
         <div className="flex flex-col sm:flex-row gap-4 justify-between items-center bg-card p-4 rounded-xl border border-border shadow-sm">
           <form onSubmit={handleSearchSubmit} className="flex gap-2 w-full sm:w-80">

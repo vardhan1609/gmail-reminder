@@ -10,6 +10,7 @@ Background worker and scheduler:
 - Channel independence and worker restart recovery
 """
 from datetime import datetime, timezone, timedelta
+import os
 import threading
 import time
 from typing import Dict, List, Optional, Any
@@ -101,10 +102,25 @@ def _run_scheduler():
             time.sleep(2)
 
 
-def _poll_all_accounts(db):
+def _poll_all_accounts(db, user_id: Optional[str] = None, user_email: Optional[str] = None):
+    """Poll active mailboxes, optionally restricting work to one authenticated user."""
     accounts = list(db.accounts.find({"active": True}))
     if hasattr(db, "gmail_connections"):
         accounts += list(db.gmail_connections.find({"active": True}))
+    requested_user_id = user_id
+    if requested_user_id:
+        accounts = [
+            account for account in accounts
+            if (
+                account.get("user_id") == requested_user_id
+                if account.get("user_id")
+                else bool(user_email and account.get("email", "").lower() == user_email.lower())
+            )
+        ]
+    unique_accounts = {}
+    for account in accounts:
+        unique_accounts[(account.get("email", "").lower(), account.get("token_path", ""))] = account
+    accounts = list(unique_accounts.values())
     if not accounts:
         logger.info("No active Gmail accounts to poll.")
         return
@@ -114,6 +130,14 @@ def _poll_all_accounts(db):
         email_addr = account.get("email", "")
         token_path = account.get("token_path", "")
         user_id = account.get("user_id")
+        if (
+            not user_id
+            and requested_user_id
+            and user_email
+            and email_addr.lower() == user_email.lower()
+        ):
+            # Attach pre-migration accounts to the authenticated owner during sync.
+            user_id = requested_user_id
 
         if not token_path or not os.path.isfile(token_path):
             logger.warning("Account %s skipped: token file missing or invalid (%s)", email_addr, token_path)
@@ -163,8 +187,11 @@ def _poll_all_accounts(db):
                 })
 
             if hasattr(db, "gmail_connections"):
+                connection_filter = {"email": email_addr}
+                if user_id:
+                    connection_filter["user_id"] = user_id
                 db.gmail_connections.update_one(
-                    {"email": email_addr},
+                    connection_filter,
                     {"$set": {
                         "last_sync_at": now,
                         "last_sync_status": "idle",
@@ -192,8 +219,11 @@ def _poll_all_accounts(db):
                 upsert=True,
             )
             if hasattr(db, "gmail_connections"):
+                connection_filter = {"email": email_addr}
+                if user_id:
+                    connection_filter["user_id"] = user_id
                 db.gmail_connections.update_one(
-                    {"email": email_addr},
+                    connection_filter,
                     {"$set": {"last_sync_status": f"failed: {str(exc)[:100]}"}},
                 )
             if user_id:

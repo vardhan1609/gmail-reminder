@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   Inbox,
@@ -59,11 +59,19 @@ export default function DashboardOverviewPage() {
     }
   };
 
-  const { subscribe } = useRealtime();
+  const { subscribe, connectionState } = useRealtime();
+  const hasConnectedRef = useRef(false);
 
   useEffect(() => {
     loadDashboardData();
   }, []);
+
+  useEffect(() => {
+    if (connectionState === "connected") {
+      if (hasConnectedRef.current) loadDashboardData();
+      hasConnectedRef.current = true;
+    }
+  }, [connectionState]);
 
   useEffect(() => {
     // 1. Listen for new incoming emails
@@ -163,7 +171,7 @@ export default function DashboardOverviewPage() {
         description="Live summary of your monitored Gmail inboxes and automated notifications."
       />
 
-      <main className="flex-1 p-8 space-y-8 max-w-7xl mx-auto w-full">
+      <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-8 max-w-7xl mx-auto w-full">
         {error && (
           <div className="flex items-center gap-2 p-4 text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-xl">
             <AlertCircle className="h-5 w-5 shrink-0" />

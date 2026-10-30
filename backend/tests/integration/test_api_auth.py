@@ -1,31 +1,36 @@
-"""
-Integration tests for API authentication and authorization controls.
-"""
+"""Integration tests for authenticated, tenant-scoped API endpoints."""
+from types import SimpleNamespace
+
 from fastapi.testclient import TestClient
+
+from app.main import app
+from app.middleware.auth import get_current_user
 
 
 def test_api_v1_endpoints_require_auth(client: TestClient):
-    # Requesting protected endpoint without X-API-Key should return 401
-    resp = client.get("/api/v1/emails")
-    assert resp.status_code == 401
-    assert "unauthorized" in resp.text.lower()
+    response = client.get("/api/v1/emails")
+    assert response.status_code == 401
+    assert "authentication required" in response.text.lower()
 
 
-def test_api_v1_endpoints_succeed_with_valid_auth(client: TestClient, auth_headers):
-    # Requesting with valid X-API-Key should return 200
-    resp = client.get("/api/v1/emails", headers=auth_headers)
-    assert resp.status_code == 200
-    data = resp.json()
+def test_api_v1_endpoints_succeed_with_valid_user_session(client: TestClient):
+    # The endpoint is session-authenticated; an API-wide static key alone is not a user identity.
+    app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id="test-user")
+    try:
+        response = client.get("/api/v1/emails")
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)
+
+    assert response.status_code == 200
+    data = response.json()
     assert "emails" in data
     assert "total" in data
 
 
 def test_public_health_and_ready_endpoints(client: TestClient):
-    # /health and /ready must remain publicly accessible without auth
-    h_resp = client.get("/health")
-    assert h_resp.status_code == 200
-    assert h_resp.json()["status"] == "ok"
+    health_response = client.get("/health")
+    assert health_response.status_code == 200
+    assert health_response.json()["status"] == "ok"
 
-    r_resp = client.get("/ready")
-    assert r_resp.status_code in (200, 503)
-
+    ready_response = client.get("/ready")
+    assert ready_response.status_code in (200, 503)
