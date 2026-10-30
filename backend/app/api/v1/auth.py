@@ -712,6 +712,10 @@ def google_sso_callback(
         )
     elif not user.is_active:
         return finish_redirect("/login?error=account_disabled")
+    elif not user.is_verified:
+        # A verified Google email proves control of the same address for this account.
+        user.is_verified = True
+        db.commit()
 
     _, raw_token = auth_service.create_session(
         db,
