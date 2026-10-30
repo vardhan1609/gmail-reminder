@@ -13,6 +13,7 @@ def test_poll_all_accounts_processes_only_requested_user_and_oauth_connection(mo
     connections=FakeCollection([
         {"id":"one","user_id":"user-1","email":"one@example.com","token_path":str(token_file),"active":True},
         {"id":"two","user_id":"user-2","email":"two@example.com","token_path":str(token_file),"active":True},
+        {"id":"cross-tenant","user_id":"user-2","email":"one@example.com","token_path":str(token_file),"active":True},
     ])
     db=SimpleNamespace(accounts=FakeCollection(),gmail_connections=connections,sync_states=FakeCollection())
     calls=[]
