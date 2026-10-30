@@ -54,6 +54,31 @@ def test_user_registration_and_strength_validation(client: TestClient):
     assert "already exists" in res_dup.json()["detail"].lower()
 
 
+
+def test_registration_requires_terms_consent(client: TestClient):
+    """Terms acceptance is mandatory; marketing consent remains optional."""
+    payload = {
+        "email": "consent_test@example.com",
+        "password": "StrongPassword123!",
+        "full_name": "Consent User",
+    }
+    missing = client.post("/api/v1/auth/register", json=payload)
+    assert missing.status_code == 422
+
+    declined = client.post(
+        "/api/v1/auth/register",
+        json={**payload, "terms_accepted": False},
+    )
+    assert declined.status_code == 400
+    assert "accept" in declined.json()["detail"].lower()
+
+    accepted = client.post(
+        "/api/v1/auth/register",
+        json={**payload, "terms_accepted": True, "marketing_opt_in": False},
+    )
+    assert accepted.status_code == 201
+
+
 def test_email_verification_flow(client: TestClient):
     """Test email verification with valid, invalid, and replayed tokens."""
     # Register user
