@@ -41,6 +41,10 @@ function LoginForm() {
     }
   };
 
+  const startGoogleLogin = () => {
+    window.location.assign(`${getApiBase()}/auth/google-sso/login?intent=login`);
+  };
+
   return (
     <Card className="w-full max-w-md shadow-md border-slate-200">
       <CardHeader className="text-center pb-4">
@@ -93,6 +97,10 @@ function LoginForm() {
         <CardFooter className="flex flex-col gap-3">
           <Button type="submit" className="w-full" loading={loading}>
             Sign In
+          </Button>
+          <div className="flex items-center gap-3 w-full text-xs text-muted-foreground"><span className="h-px flex-1 bg-border" />OR<span className="h-px flex-1 bg-border" /></div>
+          <Button type="button" variant="outline" className="w-full" onClick={startGoogleLogin}>
+            <span className="mr-2 font-bold text-base">G</span> Continue with Google
           </Button>
 
           <p className="text-center text-xs text-muted-foreground">
