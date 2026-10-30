@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Mail, Check, X, AlertCircle } from "lucide-react";
-import { api } from "@/lib/api";
+import { api, getApiBase } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,6 +15,8 @@ export default function SignupPage() {
   const [fullName, setFullName] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [marketingOptIn, setMarketingOptIn] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -26,7 +28,7 @@ export default function SignupPage() {
   const hasSpecial = /[\W_]/.test(password);
   const passwordsMatch = password.length > 0 && password === confirmPassword;
   const isFormValid =
-    hasMinLength && hasUppercase && hasLowercase && hasNumber && hasSpecial && passwordsMatch;
+    hasMinLength && hasUppercase && hasLowercase && hasNumber && hasSpecial && passwordsMatch && termsAccepted;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
