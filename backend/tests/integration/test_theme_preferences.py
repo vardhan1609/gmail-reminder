@@ -11,7 +11,7 @@ def test_theme_preference_default_and_updates(client: TestClient):
     # 1. Register and login a user
     client.post(
         "/api/v1/auth/register",
-        json={"email": "themeuser@example.com", "password": "SecurePassword123!", "full_name": "Theme User"},
+        json={"email": "themeuser@example.com", "password": "SecurePassword123!", "full_name": "Theme User", "terms_accepted": true},
     )
     login_res = client.post(
         "/api/v1/auth/login",
@@ -62,7 +62,7 @@ def test_theme_preference_invalid_value_rejected(client: TestClient):
     """Test that invalid theme values return 400 Bad Request."""
     client.post(
         "/api/v1/auth/register",
-        json={"email": "invalidtheme@example.com", "password": "SecurePassword123!", "full_name": "Invalid Theme User"},
+        json={"email": "invalidtheme@example.com", "password": "SecurePassword123!", "full_name": "Invalid Theme User", "terms_accepted": true},
     )
     login_res = client.post(
         "/api/v1/auth/login",
@@ -85,7 +85,7 @@ def test_theme_preference_tenant_isolation(client: TestClient):
     # User 1
     client.post(
         "/api/v1/auth/register",
-        json={"email": "tenant_theme_1@example.com", "password": "SecurePassword123!", "full_name": "Tenant 1"},
+        json={"email": "tenant_theme_1@example.com", "password": "SecurePassword123!", "full_name": "Tenant 1", "terms_accepted": true},
     )
     login_1 = client.post(
         "/api/v1/auth/login",
@@ -96,7 +96,7 @@ def test_theme_preference_tenant_isolation(client: TestClient):
     # User 2
     client.post(
         "/api/v1/auth/register",
-        json={"email": "tenant_theme_2@example.com", "password": "SecurePassword123!", "full_name": "Tenant 2"},
+        json={"email": "tenant_theme_2@example.com", "password": "SecurePassword123!", "full_name": "Tenant 2", "terms_accepted": true},
     )
     login_2 = client.post(
         "/api/v1/auth/login",
