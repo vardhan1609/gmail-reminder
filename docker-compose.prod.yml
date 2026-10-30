@@ -1,0 +1,93 @@
+services:
+  caddy:
+    image: caddy:2-alpine
+    container_name: gmail-reminder-caddy
+    restart: unless-stopped
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN:?Set APP_DOMAIN in .env.production}
+      API_DOMAIN: ${API_DOMAIN:?Set API_DOMAIN in .env.production}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - public
+      - private
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: gmail-reminder-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - private
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: gmail-reminder-backend
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      COOKIE_SECURE: "true"
+      WHATSAPP_SERVICE_URL: http://127.0.0.1:3000
+    volumes:
+      - app_data:/app/data
+      - app_tokens:/app/tokens
+      - app_logs:/app/logs
+      - whatsapp_session:/app/whatsapp-bridge/session
+    depends_on:
+      postgres:
+        condition: service_healthy
+    expose:
+      - "8000"
+    networks:
+      - private
+      - public
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: https://${API_DOMAIN:?Set API_DOMAIN in .env.production}/api/v1
+    container_name: gmail-reminder-frontend
+    restart: unless-stopped
+    expose:
+      - "3000"
+    networks:
+      - public
+
+volumes:
+  pg_data:
+  app_data:
+  app_tokens:
+  app_logs:
+  whatsapp_session:
+  caddy_data:
+  caddy_config:
+
+networks:
+  public:
+  private:
+    internal: true
