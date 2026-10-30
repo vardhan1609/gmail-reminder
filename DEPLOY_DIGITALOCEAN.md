@@ -68,15 +68,16 @@ If the health route differs in your deployed application, inspect the FastAPI ro
 - Confirm session cookies are Secure and HttpOnly and that OAuth tokens are encrypted at rest.
 - The production Compose file does not publish PostgreSQL or the FastAPI port to the host.
 - The backend currently starts its scheduler from the application lifecycle. Run only one backend replica until scheduling is moved to a dedicated singleton worker with distributed locking.
-- The WhatsApp Web bridge stores its session in a named Docker volume. Back up that volume securely. Prefer the official Meta Cloud API for a production customer-facing service; the web client is unofficial and can be fragile.
+- The WhatsApp Web bridge is launched only when `WHATSAPP_PROVIDER=webjs`. With `WHATSAPP_PROVIDER=meta`, the backend sends through the official Meta Cloud API and does not start the browser bridge. Meta Cloud API destinations must be individual phone numbers in the format expected by Meta, not WhatsApp group IDs.
+- The PostgreSQL container is attached only to an internal Docker network. The backend has a separate outbound-capable network for Google and notification APIs.
 - Test a new account end-to-end: signup, verification, login, MFA enrollment and challenge, Gmail OAuth, sync, reminder creation, and each notification channel.
 - Configure off-server encrypted PostgreSQL backups and test a restore before relying on the service.
 
 ## 7. Updating the deployment
 
-After merging a reviewed change to the deployment branch:
+After merging the reviewed pull request into `main`, update the Droplet:
 ```bash
-git pull
+git pull origin main
 docker compose --env-file .env.production -f docker-compose.prod.yml build
 docker compose --env-file .env.production -f docker-compose.prod.yml run --rm backend alembic upgrade head
 docker compose --env-file .env.production -f docker-compose.prod.yml up -d
