@@ -6,7 +6,7 @@ This guide uses the repository's existing FastAPI, Next.js, PostgreSQL, and embe
 
 Recommended starting point: Ubuntu 24.04 LTS, 4 vCPU, 8 GB RAM, and at least 100 GB SSD. The WhatsApp Web bridge uses Chromium and can be memory-intensive. A smaller Droplet is suitable only for initial testing.
 
-Create DNS A records for `app.yourdomain.com` and `api.yourdomain.com`, both pointing to the Droplet IPv4 address. Allow inbound TCP 22, 80, and 443 in the DigitalOcean firewall. Do not expose PostgreSQL (5432), Redis (if added later), or the API port directly.
+Create DNS A records for `app.vuvg.in` and `api.vuvg.in`, both pointing to the Droplet IPv4 address. Allow inbound TCP 22, 80, and 443 in the DigitalOcean firewall. Do not expose PostgreSQL (5432), Redis (if added later), or the API port directly.
 
 ## 2. Install Docker
 
@@ -29,12 +29,12 @@ cp .env.production.example .env.production
 
 Edit `.env.production`. Set both domains, a unique PostgreSQL password, a strong application secret, a valid Fernet key for `GOOGLE_TOKEN_ENCRYPTION_KEY`, and your provider credentials. Generate random secrets with `openssl rand -hex 32`. Generate the Fernet key using Python's `cryptography.fernet.Fernet.generate_key()`.
 
-Replace every `example.com` value with your actual domain. Do not commit `.env.production`.
+Replace every `vuvg.in` value with your actual domain. Do not commit `.env.production`.
 
 ## 4. Configure Google OAuth
 
 In Google Cloud Console, add the production callback URI exactly as configured in `GOOGLE_REDIRECT_URI`:
-`https://api.yourdomain.com/auth/google/callback`
+`https://api.vuvg.in/auth/google/callback`
 
 Add the frontend domain to the authorized JavaScript origins if your OAuth client configuration requires it. Ensure the consent screen and Gmail scopes have the verification status appropriate for your intended users.
 
@@ -57,7 +57,7 @@ docker compose --env-file .env.production -f docker-compose.prod.yml logs -f cad
 
 Test:
 ```bash
-curl -fsS https://api.yourdomain.com/health
+curl -fsS https://api.vuvg.in/health
 ```
 If the health route differs in your deployed application, inspect the FastAPI route list and use its actual health endpoint.
 
