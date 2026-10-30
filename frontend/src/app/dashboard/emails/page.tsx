@@ -133,7 +133,7 @@ export default function EmailsPage() {
       unsubClassified();
       unsubSync();
     };
-  }, [subscribe, page]);
+  }, [subscribe, page, submittedSearch]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
