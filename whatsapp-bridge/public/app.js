@@ -25,7 +25,8 @@ document.addEventListener("DOMContentLoaded", () => {
   // Meta credentials form
   document.getElementById("metaForm").addEventListener("submit", saveMeta);
 
-  // Fetch service token for test messages
+  // Ask the operator for the bridge token. It remains in memory only and is
+  // never fetched from the service or stored in browser storage.
   fetchServiceToken();
 
   // Load saved config if available
@@ -94,7 +95,7 @@ async function fetchStatus() {
 // ─── QR Code ───
 async function fetchQR() {
   try {
-    const res = await fetch("/api/qr");
+    const res = await fetch("/api/qr", { headers: bridgeAuthHeaders() });
     const data = await res.json();
 
     const container = document.getElementById("qrContainer");
@@ -162,7 +163,7 @@ async function saveMeta(e) {
   try {
     const res = await fetch("/api/configure", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: bridgeAuthHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({
         mode: "meta",
         phoneNumberId,
@@ -253,7 +254,7 @@ async function sendTestMessage() {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": "Bearer " + (window._serviceToken || "change-me"),
+        "Authorization": "Bearer " + (window._serviceToken || ""),
       },
       body: JSON.stringify(body),
     });
@@ -273,20 +274,25 @@ async function sendTestMessage() {
 }
 
 // ─── Fetch Service Token ───
+function bridgeAuthHeaders(extra = {}) {
+  return {
+    ...extra,
+    Authorization: "Bearer " + (window._serviceToken || ""),
+  };
+}
+
 async function fetchServiceToken() {
-  try {
-    const res = await fetch("/api/token-hint");
-    const data = await res.json();
-    window._serviceToken = data.token || "change-me";
-  } catch {
-    window._serviceToken = "change-me";
+  window._serviceToken = window.prompt("Enter the WhatsApp bridge service token") || "";
+  if (window._serviceToken.length < 32) {
+    window._serviceToken = "";
+    showToast("A valid bridge service token is required to manage the session.", "error");
   }
 }
 
 // ─── Load Saved Config ───
 async function loadSavedConfig() {
   try {
-    const res = await fetch("/api/qr");
+    const res = await fetch("/api/qr", { headers: bridgeAuthHeaders() });
     const data = await res.json();
     if (data.mode) {
       switchMode(data.mode);
