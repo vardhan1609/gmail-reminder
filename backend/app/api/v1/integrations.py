@@ -245,13 +245,6 @@ def disconnect_gmail(
         .first()
     )
     if not conn:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Gmail connection not found.",
-        )
-
-    # A repeated disconnect is safe: the authenticated user's resource is already absent.
-    if not conn:
         return {"message": "Gmail account disconnected successfully."}
 
     token_path = conn.token_path
