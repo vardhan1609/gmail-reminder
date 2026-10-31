@@ -401,8 +401,8 @@ def test_notification_integration(
         raise HTTPException(status_code=403, detail="WhatsApp testing is available on the Premium plan.")
 
     test_text = (
-        f"🔔 *Gmail-to-Chat Alert Test*\\n\\n"
-        f"Hi {current_user.full_name or current_user.email}!\\n"
+        f"🔔 *Gmail-to-Chat Alert Test*\n\n"
+        f"Hi {current_user.full_name or current_user.email}!\n"
         f"Your {integration.type.capitalize()} notification channel is properly configured and verified."
     )
 
