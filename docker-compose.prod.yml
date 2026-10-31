@@ -19,6 +19,7 @@ services:
       - backend
     networks:
       - public
+      - private
 
   postgres:
     image: postgres:16-alpine
@@ -63,7 +64,6 @@ services:
       - "8000"
     networks:
       - private
-      - public
 
   frontend:
     build:
