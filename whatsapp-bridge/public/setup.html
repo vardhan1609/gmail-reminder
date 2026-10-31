@@ -122,10 +122,10 @@
         </div>
 
         <div class="form-group">
-          <label for="verifyToken">Webhook Verify Token <span class="optional">(optional)</span></label>
+          <label for="verifyToken">Webhook Verify Token <span class="optional">(required)</span></label>
           <div class="input-wrapper">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-            <input type="text" id="verifyToken" name="verifyToken" placeholder="your-webhook-verify-token">
+            <input type="text" id="verifyToken" name="verifyToken" placeholder="32+ character random secret" minlength="32" required>
           </div>
         </div>
 
