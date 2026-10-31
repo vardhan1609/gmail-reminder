@@ -4,7 +4,7 @@ import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Mail, Lock, AlertCircle } from "lucide-react";
-import { api } from "@/lib/api";
+import { api, getApiBase } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,6 +39,10 @@ function LoginForm() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const startGoogleLogin = () => {
+    window.location.assign(`${getApiBase()}/auth/google-sso/login?intent=login`);
   };
 
   return (
@@ -93,6 +97,10 @@ function LoginForm() {
         <CardFooter className="flex flex-col gap-3">
           <Button type="submit" className="w-full" loading={loading}>
             Sign In
+          </Button>
+          <div className="flex items-center gap-3 w-full text-xs text-muted-foreground"><span className="h-px flex-1 bg-border" />OR<span className="h-px flex-1 bg-border" /></div>
+          <Button type="button" variant="outline" className="w-full" onClick={startGoogleLogin}>
+            <span className="mr-2 font-bold text-base">G</span> Continue with Google
           </Button>
 
           <p className="text-center text-xs text-muted-foreground">
