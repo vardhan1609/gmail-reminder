@@ -157,4 +157,7 @@ def test_bridge_webhook_configuration_fails_closed_and_binds_loopback():
     )[0]
     assert 'app.post("/api/configure", requireAuth' in source
     assert 'metaConfig.verifyToken = verifyToken;' in source
+    assert 'WHATSAPP_APP_SECRET' in source
+    assert 'x-hub-signature-256' in source
+    assert 'crypto.timingSafeEqual(supplied, expected)' in source
     assert 'msg.text?.body' not in source
