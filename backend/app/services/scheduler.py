@@ -107,15 +107,15 @@ def _poll_all_accounts(db, user_id: Optional[str] = None, user_email: Optional[s
     accounts = list(db.accounts.find({"active": True}))
     if hasattr(db, "gmail_connections"):
         accounts += list(db.gmail_connections.find({"active": True}))
+
+    # Ownerless pre-migration records are quarantined. Never infer ownership
+    # from a matching mailbox email: an orphan may belong to another tenant.
+    accounts = [account for account in accounts if account.get("user_id")]
     requested_user_id = user_id
     if requested_user_id:
         accounts = [
             account for account in accounts
-            if (
-                account.get("user_id") == requested_user_id
-                if account.get("user_id")
-                else bool(user_email and account.get("email", "").lower() == user_email.lower())
-            )
+            if account.get("user_id") == requested_user_id
         ]
     unique_accounts = {}
     for account in accounts:
@@ -156,14 +156,6 @@ def _poll_all_accounts(db, user_id: Optional[str] = None, user_email: Optional[s
         email_addr = account.get("email", "")
         token_path = account.get("token_path", "")
         user_id = account.get("user_id")
-        if (
-            not user_id
-            and requested_user_id
-            and user_email
-            and email_addr.lower() == user_email.lower()
-        ):
-            # Attach pre-migration accounts to the authenticated owner during sync.
-            user_id = requested_user_id
 
         if not token_path or not os.path.isfile(token_path):
             logger.warning("Account %s skipped: token file missing or invalid (%s)", email_addr, token_path)

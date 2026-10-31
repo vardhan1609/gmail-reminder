@@ -1,6 +1,7 @@
 import base64
 import hashlib
 import hmac
+from datetime import datetime, timezone
 
 from app.config import settings
 from app.services.billing import (
@@ -44,15 +45,13 @@ def test_razorpay_webhook_signature(monkeypatch):
 def test_cashfree_webhook_signature(monkeypatch):
     monkeypatch.setattr(settings, "cashfree_webhook_secret", "test-secret")
     body = b'{"type":"PAYMENT_LINK_EVENT"}'
-    timestamp = "1761900000"
+    timestamp = str(int(datetime.now(timezone.utc).timestamp()))
     signature = base64.b64encode(
         hmac.new(b"test-secret", timestamp.encode() + body, hashlib.sha256).digest()
     ).decode()
     headers = {"x-webhook-signature": signature, "x-webhook-timestamp": timestamp}
     assert CashfreeAdapter().verify_webhook(body, headers)
     assert not CashfreeAdapter().verify_webhook(body, {"x-webhook-signature": "invalid"})
-
-from datetime import datetime, timezone
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker

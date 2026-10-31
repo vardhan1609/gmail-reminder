@@ -139,16 +139,13 @@ def test_ws_expired_session_rejected(client):
 
 def test_ws_user_isolation(client):
     """Events published for User A must never be received by User B."""
-    from fastapi.testclient import TestClient
-    from app.main import app
+    # Reuse the fixture's TestClient so the application has exactly one
+    # lifespan/event loop. Spawning two TestClients here races the global
+    # WebSocket publisher loop and can leave receive_text() waiting forever.
+    user_a_id, _ = _register_and_login_user(client, "user_a@example.com")
+    user_b_id, _ = _register_and_login_user(client, "user_b@example.com")
 
-    client_a = TestClient(app)
-    user_a_id, _ = _register_and_login_user(client_a, "user_a@example.com")
-
-    client_b = TestClient(app)
-    user_b_id, _ = _register_and_login_user(client_b, "user_b@example.com")
-
-    with client_b.websocket_connect("/api/v1/ws") as ws_b:
+    with client.websocket_connect("/api/v1/ws") as ws_b:
         welcome = json.loads(ws_b.receive_text())
         assert welcome["data"]["user_id"] == user_b_id
 

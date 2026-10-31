@@ -35,20 +35,44 @@ def send_test_notification(
 
     target_id = payload.destination_id
     if not target_id:
-        # Check for registered destination
-        dest = db.destinations.find_one({"user_id": current_user.id, "type": channel, "is_default": True}) or db.destinations.find_one({"user_id": current_user.id, "type": channel})
+        # Resolve only from this user's registered destinations.
+        dest = db.destinations.find_one(
+            {"user_id": current_user.id, "type": channel, "is_default": True}
+        ) or db.destinations.find_one({"user_id": current_user.id, "type": channel})
         if dest:
             target_id = dest.get("target_id")
-
-    if target_id:
-        owned = db.destinations.find_one({"user_id": current_user.id, "type": channel, "target_id": target_id})
-        if not owned:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Notification destination not found.")
 
     if not target_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"No destination_id provided and no default {channel} destination configured.",
+        )
+
+    # Authorization is unconditional: caller-supplied destination IDs are
+    # untrusted and must resolve to a destination owned by this user.
+    owned = db.destinations.find_one(
+        {"user_id": current_user.id, "type": channel, "target_id": target_id}
+    )
+    if not owned:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Notification destination not found.",
+        )
+
+    # Bound manual test sends independently of the monthly plan quota.
+    from datetime import datetime, time, timezone
+    utc_day_start = datetime.combine(
+        datetime.now(timezone.utc).date(), time.min, tzinfo=timezone.utc
+    )
+    daily_test_count = db.notification_deliveries.count_documents({
+        "user_id": current_user.id,
+        "notification_type": "test",
+        "created_at": {"$gte": utc_day_start},
+    })
+    if daily_test_count >= 10:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Daily test notification limit reached. Try again tomorrow.",
         )
 
     if channel == "telegram" and not validate_chat_id(target_id):
