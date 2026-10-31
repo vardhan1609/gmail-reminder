@@ -140,6 +140,7 @@ def test_login_and_cookie_session(client: TestClient):
     )
     assert good_login.status_code == 200
     assert good_login.json()["mfa_required"] is False
+    assert "token" not in good_login.json()
     assert settings.session_cookie_name in good_login.cookies
 
     # 3. Access /auth/me with session cookie
@@ -221,4 +222,17 @@ def test_password_reset_flow(client: TestClient, monkeypatch):
         json={"email": email, "password": new_password},
     )
     assert new_login.status_code == 200
+
+def test_legacy_management_routes_are_not_mounted(client: TestClient):
+    """Legacy endpoints without tenant-scoped session dependencies are unavailable."""
+    for path in ("/accounts", "/destinations", "/calendar", "/reminders"):
+        assert client.get(path).status_code == 404
+
+
+def test_api_key_authentication_fails_closed_when_unset(client: TestClient, monkeypatch):
+    """An unset API_KEY must never silently authorize API-key protected endpoints."""
+    monkeypatch.setattr(settings, "api_key", "")
+    response = client.get("/api/v1/config")
+    assert response.status_code == 500
+    assert response.json()["detail"] == "Server authentication is not configured."
 
