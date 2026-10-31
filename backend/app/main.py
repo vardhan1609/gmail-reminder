@@ -132,7 +132,7 @@ app = FastAPI(
     title="Gmail → WhatsApp & Telegram Notification System",
     description="Monitors Gmail mailboxes, classifies emails, and delivers notifications and reminders via WhatsApp and Telegram.",
     version="2.0.0",
-    docs_url=None if settings.environment.lower() == "production" else "/docs",
+    docs_url=None if settings.environment.lower() in {"production", "prod"} else "/docs",
     redoc_url=None if settings.environment.lower() == "production" else "/redoc",
     openapi_url=None if settings.environment.lower() == "production" else "/openapi.json",
     lifespan=lifespan,
@@ -185,7 +185,7 @@ def dashboard():
     index_file = STATIC_DIR / "index.html"
     if index_file.exists():
         return FileResponse(index_file)
-    return {"message": "Dashboard UI not found", "api_docs": "/docs"}
+    return {"message": "Dashboard UI not found"}
 
 
 # The WhatsApp bridge is an internal service and is never exposed through
