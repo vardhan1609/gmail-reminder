@@ -241,6 +241,22 @@ class CashfreeAdapter(PaymentAdapter):
         timestamp = headers.get("x-webhook-timestamp", "")
         if not settings.cashfree_webhook_secret or not supplied or not timestamp:
             return False
+
+        # Cashfree signs the timestamp, but signature validity alone does not
+        # prevent replay. Reject timestamps outside a narrow five-minute window.
+        try:
+            timestamp_value = int(timestamp)
+            # Cashfree sends epoch milliseconds; accept epoch seconds too for
+            # compatibility with documented/test integrations.
+            timestamp_seconds = (
+                timestamp_value / 1000 if timestamp_value > 10_000_000_000
+                else timestamp_value
+            )
+        except (TypeError, ValueError):
+            return False
+        if abs(datetime.now(timezone.utc).timestamp() - timestamp_seconds) > 300:
+            return False
+
         expected = base64.b64encode(
             hmac.new(settings.cashfree_webhook_secret.encode(), timestamp.encode() + body, hashlib.sha256).digest()
         ).decode()
