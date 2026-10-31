@@ -109,6 +109,14 @@ def check_rate_limit(key: str) -> Tuple[bool, int]:
         return True, 0
 
 
+def get_client_ip(request) -> str:
+    """Resolve the client IP from the reverse-proxy header set by trusted Caddy."""
+    forwarded = request.headers.get("x-forwarded-for", "")
+    if forwarded:
+        return forwarded.split(",", 1)[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
 def check_audit_rate_limit(
     db: Session,
     event_type: str,
