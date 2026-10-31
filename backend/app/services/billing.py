@@ -218,7 +218,7 @@ class CashfreeAdapter(PaymentAdapter):
             "link_currency": order.currency,
             "link_purpose": f"Gmail Reminder {order.plan_code.title()} monthly subscription",
             "customer_details": {"customer_email": user.email, "customer_name": user.full_name or user.email},
-            "link_meta": {"return_url": callback_url, "notify_url": callback_url},
+            "link_meta": {"return_url": callback_url},
             "link_notify": {"send_email": True, "send_sms": False},
         }
         response = httpx.post(
