@@ -17,6 +17,7 @@ from app.models.db_models import (
     GmailConnectionModel, NotificationIntegrationModel, PaymentOrderModel,
     SubscriptionModel, UserModel, UsageEventModel, utc_now,
 )
+from app.services.auth_service import log_audit_event
 from app.services.billing import (
     PLAN_CATALOG, activate_paid_subscription, get_active_subscription,
     get_payment_adapter, plan_price_paise, subscription_payload,
@@ -230,6 +231,29 @@ def admin_customers(
     return {"customers": customers, "total": total, "limit": limit, "skip": skip}
 
 
+@router.get("/admin/orders")
+def admin_orders(
+    limit: int = 50,
+    admin: UserModel = Depends(require_admin),
+    db: Session = Depends(get_db_session),
+):
+    limit = max(1, min(limit, 100))
+    rows = db.query(PaymentOrderModel).order_by(PaymentOrderModel.created_at.desc()).limit(limit).all()
+    return {"orders": [{
+        "id": row.id,
+        "user_id": row.user_id,
+        "customer_email": db.query(UserModel.email).filter(UserModel.id == row.user_id).scalar(),
+        "plan_code": row.plan_code,
+        "provider": row.provider,
+        "provider_order_id": row.provider_order_id,
+        "provider_payment_id": row.provider_payment_id,
+        "amount_paise": row.amount_paise,
+        "currency": row.currency,
+        "status": row.status,
+        "created_at": row.created_at.isoformat() if row.created_at else None,
+        "paid_at": row.paid_at.isoformat() if row.paid_at else None,
+    } for row in rows]}
+
 @router.patch("/admin/customers/{user_id}")
 def admin_update_customer(
     user_id: str,
@@ -256,4 +280,5 @@ def admin_update_customer(
             current_period_end=datetime(2099, 1, 1, tzinfo=timezone.utc) if req.plan_code == "basic" else now + timedelta(days=30),
         ))
     db.commit()
+    log_audit_event(db, event_type="admin_customer_updated", user_id=admin.id, details={"target_user_id": user.id, "is_active": req.is_active, "plan_code": req.plan_code})
     return {"message": "Customer updated.", "customer_id": user.id}
