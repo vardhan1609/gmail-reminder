@@ -186,6 +186,12 @@ def deliver_notification_idempotent(
     if not idempotency_key:
         idempotency_key = f"{email_id or 'none'}_{channel}_{destination_id}_{notification_type}_{uuid.uuid4().hex[:6]}"
 
+    # Resolve ownership from the persisted email if a legacy caller omitted user_id.
+    if not user_id and email_id:
+        source_email = db.emails.find_one({"id": email_id})
+        if source_email:
+            user_id = source_email.get("user_id")
+
     # Check existing delivery
     existing = db.notification_deliveries.find_one({"idempotency_key": idempotency_key})
     if existing and existing.get("status") == DeliveryStatus.sent.value:
@@ -290,4 +296,5 @@ def send_notification(destination: Any, message: str) -> Tuple[bool, Optional[st
         notification_type="manual",
         message=message,
         idempotency_key=f"manual_{dest_id}_{uuid.uuid4().hex[:8]}",
+        user_id=getattr(destination, "user_id", None) or (destination.get("user_id") if isinstance(destination, dict) else None),
     )
