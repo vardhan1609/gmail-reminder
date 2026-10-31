@@ -37,6 +37,9 @@ from app.models.db_models import (
     UserModel,
     UserSessionModel,
     AppEventModel,
+    SubscriptionModel,
+    PaymentOrderModel,
+    UsageEventModel,
 )
 from app.utils.logger import get_logger
 

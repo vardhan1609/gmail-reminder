@@ -24,6 +24,23 @@ export interface User {
   created_at: string;
 }
 
+
+export interface SubscriptionInfo {
+  plan_code: "basic" | "premium";
+  plan_name: string;
+  status: string;
+  current_period_start: string;
+  current_period_end: string;
+  cancel_at_period_end: boolean;
+  limits: { gmail_accounts: number; monthly_notifications: number; channels: string[]; google_calendar: boolean; whatsapp: boolean };
+  usage: { notifications_used: number; notifications_limit: number };
+}
+export interface PlanInfo {
+  name: string; gmail_accounts: number; monthly_notifications: number;
+  channels: string[]; google_calendar: boolean; whatsapp: boolean;
+  price_paise: number; currency: string; billing_period: string;
+}
+
 export interface SessionInfo {
   id: string;
   ip_address: string | null;
@@ -166,6 +183,16 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
 }
 
 export const api = {
+  // Billing and subscriptions
+  getPlans: () => request<Record<"basic" | "premium", PlanInfo>>("/billing/plans"),
+  getSubscription: () => request<SubscriptionInfo>("/billing/me"),
+  createCheckout: (plan_code: "basic" | "premium", provider: "razorpay" | "cashfree") => request<{ checkout_url: string; order_id: string }>("/billing/checkout", { method: "POST", body: JSON.stringify({ plan_code, provider }) }),
+  cancelSubscription: () => request<{ message: string }>("/billing/cancel", { method: "POST" }),
+  getAdminOverview: () => request<{ customers: number; active_subscriptions: number; basic_customers: number; premium_customers: number; paid_orders: number; pending_orders: number }>("/billing/admin/overview"),
+  getAdminCustomers: (q = "") => request<{ customers: Array<any>; total: number }>("/billing/admin/customers?q=" + encodeURIComponent(q)),
+  getAdminOrders: () => request<{ orders: Array<any> }>("/billing/admin/orders"),
+  updateAdminCustomer: (id: string, body: { is_active?: boolean; plan_code?: "basic" | "premium" }) => request<{ message: string }>(`/billing/admin/customers/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+
   // Auth
   register: (body: { email: string; password: string; full_name?: string; terms_accepted: boolean; marketing_opt_in?: boolean }) =>
     request<{ message: string; user_id: string; verification_token?: string }>("/auth/register", {

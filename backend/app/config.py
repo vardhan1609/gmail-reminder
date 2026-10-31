@@ -13,6 +13,21 @@ class Settings(BaseSettings):
     google_client_secret: str = ""
     google_redirect_uri: str = "http://127.0.0.1:8000/auth/google/callback"
     google_sso_redirect_uri: str = ""
+
+    # Subscription pricing (monthly; integer minor currency units, e.g. paise for INR)
+    payment_currency: str = "INR"
+    basic_plan_price_paise: int = 0
+    premium_plan_price_paise: int = 0
+
+    # Payment provider selection: razorpay or cashfree
+    payment_provider: str = "razorpay"
+    razorpay_key_id: str = ""
+    razorpay_key_secret: str = ""
+    razorpay_webhook_secret: str = ""
+    cashfree_app_id: str = ""
+    cashfree_secret_key: str = ""
+    cashfree_webhook_secret: str = ""
+    cashfree_environment: str = "sandbox"
     google_token_encryption_key: str = ""
     gmail_scopes: str = (
         "https://www.googleapis.com/auth/gmail.readonly "
