@@ -113,3 +113,14 @@ Never commit gateway secrets. Configure the selected gateway webhook to:
 Use the exact webhook signing secret in the matching environment variable. The backend validates webhook signatures before granting Premium access. Test with sandbox credentials first. Checkout currently uses monthly hosted payment links (manual renewal); automatic recurring mandates/subscriptions are not enabled yet.
 
 Basic entitlements: 1 Gmail account, Telegram, Google Calendar, 100 notifications per calendar month. Premium: 4 Gmail accounts, Telegram, Google Calendar, WhatsApp, 500 notifications per calendar month.
+
+
+## Admin account bootstrap
+
+Register the intended administrator account normally, then promote that account once using a trusted database session:
+
+```sql
+UPDATE users SET is_admin = TRUE WHERE email = 'admin@example.com';
+```
+
+Replace the email with the verified account you control. Do not expose PostgreSQL publicly. The Admin navigation and APIs are restricted to accounts with `is_admin = TRUE`.
