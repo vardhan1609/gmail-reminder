@@ -166,10 +166,14 @@ async def payment_webhook(provider: str, request: Request, db: Session = Depends
 
     if not external_id:
         return {"received": True, "processed": False}
+    # Serialize concurrent/replayed payment events for the same order.
+    # Cashfree additionally has a signed timestamp freshness check in its adapter;
+    # Razorpay's webhook signature has no timestamp, so the paid-state lock is
+    # the replay/concurrency guard for its events.
     order = db.query(PaymentOrderModel).filter(
         PaymentOrderModel.provider == provider,
         PaymentOrderModel.provider_order_id == str(external_id),
-    ).first()
+    ).with_for_update().first()
     if not order:
         return {"received": True, "processed": False}
     if paid:
