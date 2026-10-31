@@ -42,7 +42,7 @@ logger = get_logger(__name__)
 
 _scheduler_thread: threading.Thread | None = None
 _shutdown_event = threading.Event()
-_digest_buffer: List[Dict[str, Any]] = []
+_digest_buffer: Dict[str, List[Dict[str, Any]]] = {}
 _last_digest_time = datetime.now(timezone.utc)
 
 
@@ -366,7 +366,7 @@ def _process_email(db, account_id: str, raw_email: Dict[str, Any], user_id: Opti
                     user_id=user_id,
                 )
         elif settings.notification_mode == "summary":
-            _digest_buffer.append(email_doc)
+            _digest_buffer.setdefault(user_id or "__legacy__", []).append(email_doc)
 
     # 9. Schedule deadline reminders if a confident submission deadline exists
     if deadline and deadline > datetime.now(timezone.utc) and not ambiguous:
@@ -438,33 +438,40 @@ def _process_email(db, account_id: str, raw_email: Dict[str, Any], user_id: Opti
 
 
 def _check_and_dispatch_digest(db):
-    """Flushes buffered emails in summary mode at periodic intervals."""
+    """Flush per-user digest buffers without mixing tenants; metering applies per account."""
     global _digest_buffer, _last_digest_time
     now = datetime.now(timezone.utc)
     interval_sec = settings.digest_interval_minutes * 60
 
-    if (now - _last_digest_time).total_seconds() >= interval_sec and _digest_buffer:
-        digest_emails = list(_digest_buffer)
-        _digest_buffer.clear()
-        _last_digest_time = now
+    if (now - _last_digest_time).total_seconds() < interval_sec or not _digest_buffer:
+        return
 
-        text = format_digest_summary(digest_emails)
-        # Deliver digest to default destinations
-        default_dests = list(db.destinations.find({"is_default": True, "active": True}))
-        if not default_dests:
-            default_dests = list(db.destinations.find({"active": True}))
+    pending = _digest_buffer
+    _digest_buffer = {}
+    _last_digest_time = now
+
+    for owner_key, digest_emails in pending.items():
+        user_id = None if owner_key == "__legacy__" else owner_key
+        digest_text = format_digest_summary(digest_emails)
+        if user_id:
+            default_dests = list(db.destinations.find({"user_id": user_id, "is_default": True, "active": True}))
+            if not default_dests:
+                default_dests = list(db.destinations.find({"user_id": user_id, "active": True}))
+        else:
+            default_dests = list(db.destinations.find({"is_default": True, "active": True}))
 
         for dest in default_dests:
             dest_type = dest.get("type")
             target_id = dest.get("target_id")
-            key = f"digest_{now.strftime('%Y%m%d%H%M')}_{dest_type}_{target_id}"
+            key = f"digest_{now.strftime('%Y%m%d%H%M')}_{owner_key}_{dest_type}_{target_id}"
             deliver_notification_idempotent(
                 email_id=None,
                 channel=dest_type,
                 destination_id=target_id,
                 notification_type="summary",
-                message=text,
+                message=digest_text,
                 idempotency_key=key,
+                user_id=user_id,
             )
 
 
