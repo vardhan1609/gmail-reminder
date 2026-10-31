@@ -575,3 +575,58 @@ class AppEventModel(Base):
             "created_at": _format_utc_iso(self.created_at),
         }
 
+
+
+# --- Subscription, payment and usage metering ---
+
+class SubscriptionModel(Base):
+    __tablename__ = "subscriptions"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    plan_code = Column(String(30), nullable=False, default="basic", index=True)
+    status = Column(String(30), nullable=False, default="active", index=True)
+    payment_provider = Column(String(30), nullable=True)
+    provider_customer_id = Column(String(255), nullable=True)
+    provider_subscription_id = Column(String(255), nullable=True)
+    current_period_start = Column(DateTime(timezone=True), nullable=False, default=utc_now)
+    current_period_end = Column(DateTime(timezone=True), nullable=False)
+    cancel_at_period_end = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now)
+
+
+class PaymentOrderModel(Base):
+    __tablename__ = "payment_orders"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    plan_code = Column(String(30), nullable=False)
+    provider = Column(String(30), nullable=False, index=True)
+    provider_order_id = Column(String(255), nullable=True, unique=True, index=True)
+    amount_paise = Column(Integer, nullable=False)
+    currency = Column(String(3), nullable=False, default="INR")
+    status = Column(String(30), nullable=False, default="created", index=True)
+    checkout_url = Column(Text, nullable=True)
+    provider_payment_id = Column(String(255), nullable=True)
+    raw_webhook = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
+    paid_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class UsageEventModel(Base):
+    __tablename__ = "subscription_usage_events"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    idempotency_key = Column(String(255), nullable=False)
+    usage_type = Column(String(50), nullable=False, default="notification")
+    channel = Column(String(30), nullable=True)
+    period_start = Column(DateTime(timezone=True), nullable=False, index=True)
+    status = Column(String(20), nullable=False, default="reserved")
+    created_at = Column(DateTime(timezone=True), nullable=False, default=utc_now)
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "idempotency_key", name="uq_usage_user_idempotency"),
+        Index("ix_usage_user_period_status", "user_id", "period_start", "status"),
+    )

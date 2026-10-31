@@ -6,9 +6,10 @@ password reset, TOTP MFA enrollment and verification, and session management.
 from __future__ import annotations
 
 import secrets
+from datetime import datetime, timezone
 
 from typing import Any, Dict, List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from pydantic import BaseModel, EmailStr, Field
 from google_auth_oauthlib.flow import Flow
 from google.auth.transport.requests import Request as GoogleRequest
@@ -25,6 +26,7 @@ from app.middleware.auth import (
 )
 from app.models.db_models import (
     NotificationPreferencesModel,
+    SubscriptionModel,
     UserModel,
     UserSessionModel,
 )
@@ -142,6 +144,16 @@ def register(req: RegisterRequest, request: Request, db: Session = Depends(get_d
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
+
+    # New accounts start on the Basic tier; Premium is activated only after verified payment.
+    db.add(SubscriptionModel(
+        user_id=new_user.id,
+        plan_code="basic",
+        status="active",
+        current_period_start=datetime.now(timezone.utc),
+        current_period_end=datetime(2099, 1, 1, tzinfo=timezone.utc),
+    ))
+    db.commit()
 
     # Create default notification preferences
     prefs = NotificationPreferencesModel(
@@ -698,6 +710,13 @@ def google_sso_callback(
         db.add(user)
         db.commit()
         db.refresh(user)
+        db.add(SubscriptionModel(
+            user_id=user.id,
+            plan_code="basic",
+            status="active",
+            current_period_start=datetime.now(timezone.utc),
+            current_period_end=datetime(2099, 1, 1, tzinfo=timezone.utc),
+        ))
         db.add(NotificationPreferencesModel(user_id=user.id))
         db.commit()
         auth_service.log_audit_event(
