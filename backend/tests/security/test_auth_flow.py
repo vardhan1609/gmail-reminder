@@ -3,6 +3,7 @@ Security tests for User Authentication, Registration, Session Handling,
 Password Reset, and Brute-Force Rate Limiting.
 """
 import pytest
+import re
 from fastapi.testclient import TestClient
 from app.config import settings
 from app.services import auth_service
@@ -37,8 +38,8 @@ def test_user_registration_and_strength_validation(client: TestClient):
     )
     assert res.status_code == 201
     data = res.json()
-    assert data["email"] == "alice@example.com"
-    assert "verification_token" in data
+    assert "verification_token" not in data
+    assert "email" not in data
 
     # 4. Duplicate registration rejected
     res_dup = client.post(
@@ -50,8 +51,8 @@ def test_user_registration_and_strength_validation(client: TestClient):
             "terms_accepted": True,
         },
     )
-    assert res_dup.status_code == 400
-    assert "already exists" in res_dup.json()["detail"].lower()
+    assert res_dup.status_code == 201
+    assert res_dup.json() == data or res_dup.json()["message"] == data["message"]
 
 
 
@@ -79,8 +80,14 @@ def test_registration_requires_terms_consent(client: TestClient):
     assert accepted.status_code == 201
 
 
-def test_email_verification_flow(client: TestClient):
+def test_email_verification_flow(client: TestClient, monkeypatch):
     """Test email verification with valid, invalid, and replayed tokens."""
+    # Capture the SMTP boundary so the one-time token is tested out-of-band.
+    sent_messages = []
+    monkeypatch.setattr(
+        "app.api.v1.auth.send_transactional_email",
+        lambda to_email, subject, body: sent_messages.append(body),
+    )
     # Register user
     reg = client.post(
         "/api/v1/auth/register",
@@ -92,7 +99,9 @@ def test_email_verification_flow(client: TestClient):
         },
     )
     assert reg.status_code == 201
-    token = reg.json()["verification_token"]
+    token_match = re.search(r"/verify-email\?token=([^\s]+)", sent_messages[-1])
+    assert token_match, "verification link should be delivered by email"
+    token = token_match.group(1)
 
     # Verify with invalid token
     bad_res = client.post("/api/v1/auth/verify-email", json={"token": "invalid_token_123"})
@@ -154,12 +163,17 @@ def test_login_and_cookie_session(client: TestClient):
     assert me_after_logout.status_code == 401
 
 
-def test_password_reset_flow(client: TestClient):
+def test_password_reset_flow(client: TestClient, monkeypatch):
     """Test password recovery, single-use token, and session revocation."""
     email = "reset_test@example.com"
     old_password = "OldStrongPassword123!"
     new_password = "NewStrongPassword456!"
 
+    sent_messages = []
+    monkeypatch.setattr(
+        "app.api.v1.auth.send_transactional_email",
+        lambda to_email, subject, body: sent_messages.append(body),
+    )
     client.post(
         "/api/v1/auth/register",
         json={"email": email, "password": old_password, "full_name": "Reset User", "terms_accepted": True},
@@ -168,8 +182,10 @@ def test_password_reset_flow(client: TestClient):
     # Request reset
     forgot_res = client.post("/api/v1/auth/forgot-password", json={"email": email})
     assert forgot_res.status_code == 200
-    reset_token = forgot_res.json().get("reset_token")
-    assert reset_token is not None
+    assert "reset_token" not in forgot_res.json()
+    reset_match = re.search(r"/reset-password\?token=([^\s]+)", sent_messages[-1])
+    assert reset_match, "password reset link should be delivered by email"
+    reset_token = reset_match.group(1)
 
     # Reset with weak password
     weak_reset = client.post(
