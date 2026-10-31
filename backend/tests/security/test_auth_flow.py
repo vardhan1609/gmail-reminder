@@ -13,14 +13,14 @@ def test_user_registration_and_strength_validation(client: TestClient):
     # 1. Weak password (too short)
     res = client.post(
         "/api/v1/auth/register",
-        json={"email": "alice@example.com", "password": "weak", "full_name": "Alice"},
+        json={"email": "alice@example.com", "password": "weak", "full_name": "Alice", "terms_accepted": True},
     )
     assert res.status_code == 422 or res.status_code == 400
 
     # 2. Weak password (missing uppercase and digit)
     res = client.post(
         "/api/v1/auth/register",
-        json={"email": "alice@example.com", "password": "lowercaseonly!", "full_name": "Alice"},
+        json={"email": "alice@example.com", "password": "lowercaseonly!", "full_name": "Alice", "terms_accepted": True},
     )
     assert res.status_code == 400
     assert "uppercase" in res.json()["detail"].lower() or "number" in res.json()["detail"].lower()
@@ -32,6 +32,7 @@ def test_user_registration_and_strength_validation(client: TestClient):
             "email": "alice@example.com",
             "password": "StrongPassword123!",
             "full_name": "Alice University",
+            "terms_accepted": True,
         },
     )
     assert res.status_code == 201
@@ -46,10 +47,36 @@ def test_user_registration_and_strength_validation(client: TestClient):
             "email": "alice@example.com",
             "password": "StrongPassword123!",
             "full_name": "Alice Duplicate",
+            "terms_accepted": True,
         },
     )
     assert res_dup.status_code == 400
     assert "already exists" in res_dup.json()["detail"].lower()
+
+
+
+def test_registration_requires_terms_consent(client: TestClient):
+    """Terms acceptance is mandatory; marketing consent remains optional."""
+    payload = {
+        "email": "consent_test@example.com",
+        "password": "StrongPassword123!",
+        "full_name": "Consent User",
+    }
+    missing = client.post("/api/v1/auth/register", json=payload)
+    assert missing.status_code == 422
+
+    declined = client.post(
+        "/api/v1/auth/register",
+        json={**payload, "terms_accepted": False},
+    )
+    assert declined.status_code == 400
+    assert "accept" in declined.json()["detail"].lower()
+
+    accepted = client.post(
+        "/api/v1/auth/register",
+        json={**payload, "terms_accepted": True, "marketing_opt_in": False},
+    )
+    assert accepted.status_code == 201
 
 
 def test_email_verification_flow(client: TestClient):
@@ -61,6 +88,7 @@ def test_email_verification_flow(client: TestClient):
             "email": "verify_test@example.com",
             "password": "StrongPassword123!",
             "full_name": "Verify User",
+            "terms_accepted": True,
         },
     )
     assert reg.status_code == 201
@@ -86,7 +114,7 @@ def test_login_and_cookie_session(client: TestClient):
 
     client.post(
         "/api/v1/auth/register",
-        json={"email": email, "password": password, "full_name": "Login User"},
+        json={"email": email, "password": password, "full_name": "Login User", "terms_accepted": True},
     )
 
     # 1. Invalid login attempt
@@ -134,7 +162,7 @@ def test_password_reset_flow(client: TestClient):
 
     client.post(
         "/api/v1/auth/register",
-        json={"email": email, "password": old_password, "full_name": "Reset User"},
+        json={"email": email, "password": old_password, "full_name": "Reset User", "terms_accepted": True},
     )
 
     # Request reset

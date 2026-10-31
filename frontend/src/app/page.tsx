@@ -18,6 +18,7 @@ export default function LandingPage() {
 
           <div className="flex items-center gap-3">
             <ThemeToggle variant="compact" />
+            <Link href="/pricing"><Button variant="ghost" size="sm">Pricing</Button></Link>
             <Link href="/login">
               <Button variant="ghost" size="sm">Sign In</Button>
             </Link>
@@ -98,11 +99,11 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between text-xs text-muted-foreground gap-2">
           <p>© {new Date().getFullYear()} MailNotifier. Secure Multi-User Email Automation.</p>
           <div className="flex gap-4">
-            <span>Privacy Mode Supported</span>
+            <Link href="/terms" className="hover:text-primary">Terms</Link>
             <span>•</span>
-            <span>Gmail History API</span>
+            <Link href="/privacy" className="hover:text-primary">Privacy</Link>
             <span>•</span>
-            <span>TOTP 2FA</span>
+            <Link href="/pricing" className="hover:text-primary">Pricing</Link>
           </div>
         </div>
       </footer>

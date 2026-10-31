@@ -56,6 +56,7 @@ def send_test_notification(payload: NotificationTestRequest, db=Depends(get_db))
         notification_type="test",
         message=payload.message or "🔔 Test notification from Gmail Reminder System",
         idempotency_key=test_key,
+        user_id=current_user.id if current_user else None,
     )
 
     if not success:

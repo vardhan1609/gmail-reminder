@@ -94,6 +94,7 @@ def resend_reminder(
         notification_type="reminder_resend",
         message=message,
         idempotency_key=resend_key,
+        user_id=reminder.get("user_id") or (current_user.id if current_user else None),
     )
 
     if success:

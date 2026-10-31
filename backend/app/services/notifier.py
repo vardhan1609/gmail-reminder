@@ -17,6 +17,7 @@ from app.services.telegram import send_group_message as send_tg, bot_is_ready as
 from app.services.whatsapp import send_group_message as send_wa, bridge_is_ready as wa_ready
 from app.utils.logger import get_logger
 from app.websocket import publish_event, EventType
+from app.services.billing import reserve_notification_usage, finish_notification_usage
 
 logger = get_logger(__name__)
 
@@ -185,11 +186,25 @@ def deliver_notification_idempotent(
     if not idempotency_key:
         idempotency_key = f"{email_id or 'none'}_{channel}_{destination_id}_{notification_type}_{uuid.uuid4().hex[:6]}"
 
+    # Resolve ownership from the persisted email if a legacy caller omitted user_id.
+    if not user_id and email_id:
+        source_email = db.emails.find_one({"id": email_id})
+        if source_email:
+            user_id = source_email.get("user_id")
+
     # Check existing delivery
     existing = db.notification_deliveries.find_one({"idempotency_key": idempotency_key})
     if existing and existing.get("status") == DeliveryStatus.sent.value:
         logger.info("Skipping notification with key %s: already delivered", idempotency_key)
         return True, None
+
+    usage_reserved = False
+    if user_id:
+        allowed, quota_error = reserve_notification_usage(user_id, idempotency_key, channel)
+        if not allowed:
+            logger.info("Notification blocked by subscription entitlements for user %s", user_id)
+            return False, quota_error
+        usage_reserved = True
 
     if user_id:
         publish_event(
@@ -206,6 +221,8 @@ def deliver_notification_idempotent(
     success, error_msg = send_to_channel(channel, destination_id, message)
 
     status = DeliveryStatus.sent.value if success else DeliveryStatus.failed.value
+    if usage_reserved:
+        finish_notification_usage(user_id, idempotency_key, success)
     attempts = (existing.get("attempts", 0) + 1) if existing else 1
     sent_at = datetime.now(timezone.utc) if success else None
 
@@ -279,4 +296,5 @@ def send_notification(destination: Any, message: str) -> Tuple[bool, Optional[st
         notification_type="manual",
         message=message,
         idempotency_key=f"manual_{dest_id}_{uuid.uuid4().hex[:8]}",
+        user_id=getattr(destination, "user_id", None) or (destination.get("user_id") if isinstance(destination, dict) else None),
     )

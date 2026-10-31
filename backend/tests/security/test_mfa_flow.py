@@ -16,7 +16,7 @@ def test_mfa_lifecycle_and_challenge(client: TestClient):
     # 1. Register and log in
     client.post(
         "/api/v1/auth/register",
-        json={"email": email, "password": password, "full_name": "MFA User"},
+        json={"email": email, "password": password, "full_name": "MFA User", "terms_accepted": True},
     )
     login_res = client.post("/api/v1/auth/login", json={"email": email, "password": password})
     assert login_res.status_code == 200

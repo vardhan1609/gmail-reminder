@@ -5,9 +5,15 @@ password reset, TOTP MFA enrollment and verification, and session management.
 """
 from __future__ import annotations
 
+import secrets
+from datetime import datetime, timezone
+
 from typing import Any, Dict, List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from pydantic import BaseModel, EmailStr, Field
+from google_auth_oauthlib.flow import Flow
+from google.auth.transport.requests import Request as GoogleRequest
+from google.oauth2 import id_token
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -20,6 +26,7 @@ from app.middleware.auth import (
 )
 from app.models.db_models import (
     NotificationPreferencesModel,
+    SubscriptionModel,
     UserModel,
     UserSessionModel,
 )
@@ -37,6 +44,8 @@ class RegisterRequest(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=8, max_length=128)
     full_name: Optional[str] = None
+    terms_accepted: bool = Field(..., description="Required acceptance of Terms and Privacy Policy")
+    marketing_opt_in: bool = False
 
 
 class LoginRequest(BaseModel):
@@ -102,9 +111,12 @@ class SessionResponse(BaseModel):
 # --- Endpoints ---
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
-def register(req: RegisterRequest, db: Session = Depends(get_db_session)):
+def register(req: RegisterRequest, request: Request, db: Session = Depends(get_db_session)):
     """Register a new user account with Argon2id password hashing and email verification."""
     email_clean = req.email.lower().strip()
+
+    if not req.terms_accepted:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="You must accept the Terms of Service and Privacy Policy to create an account.")
 
     # Password strength check
     is_valid, err_msg = auth_service.validate_password_strength(req.password)
@@ -133,6 +145,16 @@ def register(req: RegisterRequest, db: Session = Depends(get_db_session)):
     db.commit()
     db.refresh(new_user)
 
+    # New accounts start on the Basic tier; Premium is activated only after verified payment.
+    db.add(SubscriptionModel(
+        user_id=new_user.id,
+        plan_code="basic",
+        status="active",
+        current_period_start=datetime.now(timezone.utc),
+        current_period_end=datetime(2099, 1, 1, tzinfo=timezone.utc),
+    ))
+    db.commit()
+
     # Create default notification preferences
     prefs = NotificationPreferencesModel(
         user_id=new_user.id,
@@ -150,8 +172,15 @@ def register(req: RegisterRequest, db: Session = Depends(get_db_session)):
     # Create verification token
     verification_token = auth_service.create_email_verification_token(db, new_user.id)
 
+    client_ip = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent")
     auth_service.log_audit_event(
         db, event_type="user_registered", user_id=new_user.id, details={"email": email_clean}
+    )
+    auth_service.log_audit_event(
+        db, event_type="legal_consent_accepted", user_id=new_user.id,
+        ip_address=client_ip, user_agent=user_agent,
+        details={"terms_version": "2026-10-31", "privacy_version": "2026-10-31", "marketing_opt_in": req.marketing_opt_in},
     )
 
     return {
@@ -550,3 +579,182 @@ def revoke_all_sessions(
         db, user_id=user.id, except_session_id=current_session.id
     )
     return {"message": f"Revoked {count} other active session(s)."}
+
+
+# --- Google OpenID Connect sign-in (separate from Gmail mailbox authorization) ---
+
+GOOGLE_SSO_SCOPES = ["openid", "email", "profile"]
+GOOGLE_SSO_STATE_COOKIE = "google_sso_state"
+GOOGLE_SSO_NONCE_COOKIE = "google_sso_nonce"
+GOOGLE_SSO_INTENT_COOKIE = "google_sso_intent"
+GOOGLE_SSO_TERMS_COOKIE = "google_sso_terms"
+GOOGLE_SSO_MARKETING_COOKIE = "google_sso_marketing"
+
+
+def _google_sso_redirect_uri() -> str:
+    configured = getattr(settings, "google_sso_redirect_uri", "")
+    if configured:
+        return configured
+    return settings.google_redirect_uri.rsplit("/auth/google/callback", 1)[0] + "/api/v1/auth/google-sso/callback"
+
+
+def _google_sso_flow(state: Optional[str] = None) -> Flow:
+    client_config = {
+        "web": {
+            "client_id": settings.google_client_id,
+            "client_secret": settings.google_client_secret,
+            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+            "token_uri": "https://oauth2.googleapis.com/token",
+            "redirect_uris": [_google_sso_redirect_uri()],
+        }
+    }
+    flow = Flow.from_client_config(client_config, scopes=GOOGLE_SSO_SCOPES, state=state)
+    flow.redirect_uri = _google_sso_redirect_uri()
+    return flow
+
+
+@router.get("/google-sso/login")
+def google_sso_login(
+    response: Response,
+    intent: str = Query("login", pattern="^(login|signup)$"),
+    terms_accepted: bool = Query(False),
+    marketing_opt_in: bool = Query(False),
+):
+    """Start Google OIDC sign-in. Signup requires explicit Terms/Privacy acceptance."""
+    if not settings.google_client_id or not settings.google_client_secret:
+        raise HTTPException(status_code=503, detail="Google sign-in is not configured.")
+    if intent == "signup" and not terms_accepted:
+        raise HTTPException(status_code=400, detail="Accept the Terms of Service and Privacy Policy before continuing.")
+    state = secrets.token_urlsafe(32)
+    nonce = secrets.token_urlsafe(32)
+    flow = _google_sso_flow(state)
+    auth_url, _ = flow.authorization_url(
+        access_type="online",
+        include_granted_scopes="true",
+        prompt="select_account",
+        nonce=nonce,
+    )
+    redirect = RedirectResponse(auth_url, status_code=302)
+    cookie_args = {
+        "httponly": True,
+        "secure": settings.cookie_secure,
+        "samesite": settings.cookie_samesite,
+        "max_age": 600,
+        "path": "/api/v1/auth/google-sso",
+    }
+    redirect.set_cookie(GOOGLE_SSO_STATE_COOKIE, state, **cookie_args)
+    redirect.set_cookie(GOOGLE_SSO_NONCE_COOKIE, nonce, **cookie_args)
+    redirect.set_cookie(GOOGLE_SSO_INTENT_COOKIE, intent, **cookie_args)
+    redirect.set_cookie(GOOGLE_SSO_TERMS_COOKIE, "1" if terms_accepted else "0", **cookie_args)
+    redirect.set_cookie(GOOGLE_SSO_MARKETING_COOKIE, "1" if marketing_opt_in else "0", **cookie_args)
+    return redirect
+
+
+@router.get("/google-sso/callback")
+def google_sso_callback(
+    request: Request,
+    code: Optional[str] = Query(None),
+    state: Optional[str] = Query(None),
+    error: Optional[str] = Query(None),
+    db: Session = Depends(get_db_session),
+):
+    """Verify Google OIDC identity, create/find the local user and issue an app session."""
+    expected_state = request.cookies.get(GOOGLE_SSO_STATE_COOKIE, "")
+    nonce = request.cookies.get(GOOGLE_SSO_NONCE_COOKIE, "")
+    intent = request.cookies.get(GOOGLE_SSO_INTENT_COOKIE, "login")
+    terms_accepted = request.cookies.get(GOOGLE_SSO_TERMS_COOKIE) == "1"
+    marketing_opt_in = request.cookies.get(GOOGLE_SSO_MARKETING_COOKIE) == "1"
+    clear_names = (
+        GOOGLE_SSO_STATE_COOKIE, GOOGLE_SSO_NONCE_COOKIE, GOOGLE_SSO_INTENT_COOKIE,
+        GOOGLE_SSO_TERMS_COOKIE, GOOGLE_SSO_MARKETING_COOKIE,
+    )
+
+    def finish_redirect(path: str, status_code: int = 302):
+        result = RedirectResponse(f"{settings.frontend_base_url.rstrip('/')}{path}", status_code=status_code)
+        for cookie_name in clear_names:
+            result.delete_cookie(cookie_name, path="/api/v1/auth/google-sso")
+        return result
+
+    if error or not code or not state or not expected_state or not secrets.compare_digest(expected_state, state) or not nonce:
+        return finish_redirect("/login?error=google_state_invalid")
+
+    try:
+        flow = _google_sso_flow(state)
+        flow.fetch_token(code=code)
+        claims = id_token.verify_oauth2_token(
+            flow.credentials.id_token, GoogleRequest(), settings.google_client_id
+        )
+        if claims.get("nonce") != nonce or claims.get("email_verified") is not True:
+            raise ValueError("Google identity token claims were not valid")
+        email = str(claims.get("email", "")).lower().strip()
+        if not email:
+            raise ValueError("Google did not return a verified email address")
+    except Exception as exc:
+        logger.warning("Google SSO verification failed: %s", exc)
+        return finish_redirect("/login?error=google_signin_failed")
+
+    user = db.query(UserModel).filter(UserModel.email == email).first()
+    is_new_user = user is None
+    if is_new_user:
+        if intent != "signup" or not terms_accepted:
+            return finish_redirect("/signup?error=google_signup_requires_consent")
+        user = UserModel(
+            email=email,
+            password_hash=auth_service.hash_password(secrets.token_urlsafe(48)),
+            full_name=(claims.get("name") or "")[:255] or None,
+            is_verified=True,
+            is_active=True,
+            is_admin=False,
+            mfa_enabled=False,
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        db.add(SubscriptionModel(
+            user_id=user.id,
+            plan_code="basic",
+            status="active",
+            current_period_start=datetime.now(timezone.utc),
+            current_period_end=datetime(2099, 1, 1, tzinfo=timezone.utc),
+        ))
+        db.add(NotificationPreferencesModel(user_id=user.id))
+        db.commit()
+        auth_service.log_audit_event(
+            db, event_type="user_registered_google", user_id=user.id,
+            details={"email": email, "provider": "google"},
+        )
+        auth_service.log_audit_event(
+            db, event_type="legal_consent_accepted", user_id=user.id,
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+            details={"terms_version": "2026-10-31", "privacy_version": "2026-10-31", "marketing_opt_in": marketing_opt_in, "provider": "google"},
+        )
+    elif not user.is_active:
+        return finish_redirect("/login?error=account_disabled")
+    elif not user.is_verified:
+        # A verified Google email proves control of the same address for this account.
+        user.is_verified = True
+        db.commit()
+
+    _, raw_token = auth_service.create_session(
+        db,
+        user=user,
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+        is_mfa_completed=not bool(user.mfa_enabled),
+    )
+    if user.mfa_enabled:
+        # MFA remains mandatory for accounts that have it enabled.
+        result = finish_redirect("/mfa/challenge")
+    else:
+        result = finish_redirect("/dashboard")
+    result.set_cookie(
+        key=settings.session_cookie_name,
+        value=raw_token,
+        httponly=True,
+        secure=settings.cookie_secure,
+        samesite=settings.cookie_samesite,
+        max_age=settings.session_expiry_days * 86400,
+        path="/",
+    )
+    return result

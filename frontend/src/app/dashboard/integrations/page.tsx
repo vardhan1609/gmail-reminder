@@ -18,12 +18,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, ConfirmDialog } from "@/components/ui/dialog";
-import { api, GmailConnection, NotificationIntegration } from "@/lib/api";
+import { api, GmailConnection, NotificationIntegration, SubscriptionInfo } from "@/lib/api";
 import { formatDate } from "@/lib/utils";
 
 export default function IntegrationsPage() {
   const [connections, setConnections] = useState<GmailConnection[]>([]);
   const [integrations, setIntegrations] = useState<NotificationIntegration[]>([]);
+  const [subscription, setSubscription] = useState<SubscriptionInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -47,12 +48,14 @@ export default function IntegrationsPage() {
     setLoading(true);
     setError(null);
     try {
-      const [conns, dests] = await Promise.all([
+      const [conns, dests, plan] = await Promise.all([
         api.getGmailConnections(),
         api.getNotificationIntegrations(),
+        api.getSubscription(),
       ]);
       setConnections(conns || []);
       setIntegrations(dests || []);
+      setSubscription(plan);
     } catch (err: any) {
       setError(err.detail || "Failed to load integrations.");
     } finally {
@@ -65,6 +68,10 @@ export default function IntegrationsPage() {
   }, []);
 
   const handleConnectGmail = async () => {
+    if (subscription && connections.filter((connection) => connection.active).length >= subscription.limits.gmail_accounts) {
+      setError(`${subscription.plan_name} allows ${subscription.limits.gmail_accounts} connected Gmail account(s). Upgrade your plan to add another mailbox.`);
+      return;
+    }
     try {
       const { auth_url } = await api.getGmailAuthUrl();
       if (auth_url) {
@@ -183,6 +190,16 @@ export default function IntegrationsPage() {
           </div>
         )}
 
+        {subscription && (
+          <div className="rounded-lg border border-border bg-muted/40 px-4 py-3 text-xs text-muted-foreground">
+            <span className="font-semibold text-foreground">{subscription.plan_name} plan</span>
+            {" · "}{connections.filter((connection) => connection.active).length}/{subscription.limits.gmail_accounts} Gmail accounts
+            {" · "}{subscription.usage.notifications_used}/{subscription.usage.notifications_limit} monthly notifications
+            {" · "}{subscription.limits.whatsapp ? "WhatsApp enabled" : "WhatsApp requires Premium"}
+            {" · "}<a href="/dashboard/billing" className="font-semibold text-primary underline">Manage plan</a>
+          </div>
+        )}
+
         {successMsg && (
           <div className="flex items-center gap-2 p-4 text-sm text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-xl">
             <CheckCircle2 className="h-5 w-5 shrink-0" />
@@ -199,7 +216,7 @@ export default function IntegrationsPage() {
                 Connect your university Google Workspace or personal Gmail via secure OAuth 2.0.
               </CardDescription>
             </div>
-            <Button onClick={handleConnectGmail} className="gap-2 shadow-sm">
+            <Button onClick={handleConnectGmail} className="gap-2 shadow-sm" disabled={!!subscription && connections.filter((connection) => connection.active).length >= subscription.limits.gmail_accounts}>
               <Mail className="h-4 w-4" /> Connect Gmail Account
             </Button>
           </CardHeader>
@@ -352,7 +369,7 @@ export default function IntegrationsPage() {
               className="w-full text-xs border border-input rounded-md p-2 bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
             >
               <option value="telegram">Telegram Bot</option>
-              <option value="whatsapp">WhatsApp</option>
+              <option value="whatsapp" disabled={!subscription?.limits.whatsapp}>WhatsApp {!subscription?.limits.whatsapp ? "(Premium)" : ""}</option>
             </select>
           </div>
 

@@ -11,7 +11,7 @@ from alembic import context
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from app.config import settings
-from app.models.db_models import Base
+from app.models.db_models import Base, SubscriptionModel, PaymentOrderModel, UsageEventModel
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

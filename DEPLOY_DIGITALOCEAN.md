@@ -34,7 +34,7 @@ Replace every `vuvg.in` value with your actual domain. Do not commit `.env.produ
 ## 4. Configure Google OAuth
 
 In Google Cloud Console, add the production callback URI exactly as configured in `GOOGLE_REDIRECT_URI`:
-`https://api.vuvg.in/auth/google/callback`
+`https://api.vuvg.in/auth/google/callback`\n\nFor Google account sign-in (separate from Gmail mailbox access), also register this authorized redirect URI:\n`https://api.vuvg.in/api/v1/auth/google-sso/callback`\n\nSet `GOOGLE_SSO_REDIRECT_URI` to that exact value in `.env.production`. Both redirect URIs can be registered on the same Google OAuth web client.
 
 Add the frontend domain to the authorized JavaScript origins if your OAuth client configuration requires it. Ensure the consent screen and Gmail scopes have the verification status appropriate for your intended users.
 
@@ -85,3 +85,42 @@ docker image prune -f
 ```
 
 Do not use `docker compose down -v`: it deletes persistent volumes, including the database.
+
+
+## Subscription billing configuration
+
+Set monthly plan prices in integer paise (100 paise = INR 1) in `.env.production`:
+
+```env
+PAYMENT_CURRENCY=INR
+BASIC_PLAN_PRICE_PAISE=0
+PREMIUM_PLAN_PRICE_PAISE=YOUR_PREMIUM_PRICE_IN_PAISE
+PAYMENT_PROVIDER=razorpay
+RAZORPAY_KEY_ID=
+RAZORPAY_KEY_SECRET=
+RAZORPAY_WEBHOOK_SECRET=
+CASHFREE_APP_ID=
+CASHFREE_SECRET_KEY=
+CASHFREE_WEBHOOK_SECRET=
+CASHFREE_ENVIRONMENT=sandbox
+```
+
+Never commit gateway secrets. Configure the selected gateway webhook to:
+
+- Razorpay: `https://api.vuvg.in/api/v1/billing/webhooks/razorpay`
+- Cashfree: `https://api.vuvg.in/api/v1/billing/webhooks/cashfree`
+
+Use the exact webhook signing secret in the matching environment variable. The backend validates webhook signatures before granting Premium access. Test with sandbox credentials first. Checkout currently uses monthly hosted payment links (manual renewal); automatic recurring mandates/subscriptions are not enabled yet.
+
+Basic entitlements: 1 Gmail account, Telegram, Google Calendar, 100 notifications per calendar month. Premium: 4 Gmail accounts, Telegram, Google Calendar, WhatsApp, 500 notifications per calendar month.
+
+
+## Admin account bootstrap
+
+Register the intended administrator account normally, then promote that account once using a trusted database session:
+
+```sql
+UPDATE users SET is_admin = TRUE WHERE email = 'admin@example.com';
+```
+
+Replace the email with the verified account you control. Do not expose PostgreSQL publicly. The Admin navigation and APIs are restricted to accounts with `is_admin = TRUE`.
