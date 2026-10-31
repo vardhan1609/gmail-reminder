@@ -28,6 +28,7 @@ from app.models.db_models import (
 from app.services.auth_service import log_audit_event
 from app.services.gmail_service import build_auth_url, exchange_code_for_token
 from app.services.notifier import send_to_channel
+from app.services.billing import PLAN_CATALOG, get_active_subscription
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -167,7 +168,7 @@ def handle_gmail_callback(
     try:
         user_email, token_path = exchange_code_for_token(code)
 
-        # Upsert connection
+        # Enforce the active plan's Gmail account allowance (reconnecting an existing account is allowed).
         conn = (
             db.query(GmailConnectionModel)
             .filter(
@@ -178,6 +179,22 @@ def handle_gmail_callback(
         )
         now = datetime.now(timezone.utc)
         if not conn:
+            subscription = get_active_subscription(db, current_user.id)
+            max_accounts = PLAN_CATALOG[subscription.plan_code]["gmail_accounts"]
+            active_count = db.query(GmailConnectionModel).filter(
+                GmailConnectionModel.user_id == current_user.id,
+                GmailConnectionModel.active == True,
+            ).count()
+            if active_count >= max_accounts:
+                try:
+                    if token_path and os.path.exists(token_path):
+                        os.remove(token_path)
+                except OSError:
+                    pass
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"{subscription.plan_code.title()} plan allows {max_accounts} connected Gmail account(s). Upgrade to add another mailbox.",
+                )
             conn = GmailConnectionModel(
                 user_id=current_user.id,
                 email=user_email,
@@ -290,6 +307,10 @@ def add_notification_integration(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Integration type must be 'telegram' or 'whatsapp'.",
         )
+
+    subscription = get_active_subscription(db, current_user.id)
+    if dest_type in ("whatsapp", "whatsapp_meta") and not PLAN_CATALOG[subscription.plan_code]["whatsapp"]:
+        raise HTTPException(status_code=403, detail="WhatsApp integration is available on the Premium plan. Upgrade to enable it.")
 
     now = datetime.now(timezone.utc)
     # If is_default is true, unmark existing defaults for that type
