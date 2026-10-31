@@ -59,7 +59,7 @@ def list_reminders(
 @router.post("/{id}/resend", response_model=ReminderResendResponse)
 def resend_reminder(
     id: str,
-    current_user: Optional[UserModel] = Depends(get_optional_current_user),
+    current_user: UserModel = Depends(get_current_user),
     db=Depends(get_db),
 ):
     """Retry or resend a reminder immediately."""
@@ -104,7 +104,7 @@ def resend_reminder(
         return ReminderResendResponse(id=id, status="sent", message="Reminder delivered successfully")
     else:
         db.reminders.update_one(
-            {"id": id},
+            {"id": id, "user_id": current_user.id},
             {"$set": {
                 "status": ReminderStatus.failed.value,
                 "last_error": err,
