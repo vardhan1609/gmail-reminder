@@ -27,7 +27,7 @@ cd gmail-reminder
 cp .env.production.example .env.production
 ```
 
-Edit `.env.production`. Set both domains, a unique PostgreSQL password, a strong application secret, a valid Fernet key for `GOOGLE_TOKEN_ENCRYPTION_KEY`, and your provider credentials. Generate random secrets with `openssl rand -hex 32`. Generate the Fernet key using Python's `cryptography.fernet.Fernet.generate_key()`.
+Edit `.env.production`. Set both domains, a unique PostgreSQL password, a strong application secret, a valid Fernet key for `GOOGLE_TOKEN_ENCRYPTION_KEY`, and your provider credentials. Generate random secrets with `openssl rand -hex 32`. Generate the Fernet key using Python's `cryptography.fernet.Fernet.generate_key()`. Also set a separate `API_KEY` (at least 32 random characters) and working `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, and `SMTP_FROM_EMAIL`; production startup rejects missing API key or SMTP configuration.
 
 Replace every `vuvg.in` value with your actual domain. Do not commit `.env.production`.
 
