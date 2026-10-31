@@ -28,8 +28,12 @@ def require_api_key(
     Enforces authentication on administrative endpoints.
     Checks X-API-Key header or Authorization: Bearer <token>.
     """
-    if not settings.api_key:
-        return True
+    if not settings.api_key or settings.api_key.strip().lower() in {"change-me", "changeme", "your-api-key"}:
+        logger.error("API_KEY is not configured with a non-default value")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Server authentication is not configured.",
+        )
 
     provided_token = x_api_key
     if not provided_token and bearer_creds:
