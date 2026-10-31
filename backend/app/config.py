@@ -125,18 +125,27 @@ class Settings(BaseSettings):
         """Reject unsafe production configuration before opening the API."""
         if self.environment.lower() not in {"production", "prod"}:
             return
-        placeholders = {"", "change-me", "changeme", "change-me-secret-key-production-32-chars-min"}
+        placeholders = ("change-me", "changeme", "generate-", "your-", "replace-me", "example")
         required_secrets = {
             "SECRET_KEY": self.secret_key,
             "GOOGLE_TOKEN_ENCRYPTION_KEY": self.google_token_encryption_key,
             "WHATSAPP_SERVICE_TOKEN": self.whatsapp_service_token,
             "API_KEY": self.api_key or "",
         }
-        invalid = [name for name, value in required_secrets.items() if value.strip().lower() in placeholders or len(value) < 32]
+        invalid = [
+            name for name, value in required_secrets.items()
+            if len(value.strip()) < 32 or value.strip().lower().startswith(placeholders)
+        ]
         if invalid:
             raise RuntimeError("Production requires strong, unique secrets for: " + ", ".join(invalid))
         if not self.cookie_secure:
             raise RuntimeError("COOKIE_SECURE must be true in production.")
+        if not self.cors_allowed_origins or any(
+            origin.lower().startswith(("http://localhost", "http://127.0.0.1", "https://localhost", "https://127.0.0.1"))
+            or not origin.lower().startswith("https://")
+            for origin in self.cors_allowed_origins
+        ):
+            raise RuntimeError("Production CORS_ALLOWED_ORIGINS must contain only explicit HTTPS origins.")
         if not (self.smtp_host and self.smtp_from_email):
             raise RuntimeError("SMTP_HOST and SMTP_FROM_EMAIL are required in production for account verification and password reset.")
         if self.whatsapp_provider == "webjs" and len(self.whatsapp_service_token) < 32:
