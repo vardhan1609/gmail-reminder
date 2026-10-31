@@ -49,6 +49,7 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       COOKIE_SECURE: "true"
+      ENVIRONMENT: production
       WHATSAPP_SERVICE_URL: http://127.0.0.1:3000
     volumes:
       - app_data:/app/data
