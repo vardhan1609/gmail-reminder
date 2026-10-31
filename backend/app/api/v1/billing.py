@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -253,7 +253,7 @@ def admin_update_customer(
             plan_code=req.plan_code,
             status="active",
             current_period_start=now,
-            current_period_end=datetime(2099, 1, 1, tzinfo=timezone.utc) if req.plan_code == "basic" else now.replace(day=min(now.day, 28)) + __import__("datetime").timedelta(days=30),
+            current_period_end=datetime(2099, 1, 1, tzinfo=timezone.utc) if req.plan_code == "basic" else now + timedelta(days=30),
         ))
     db.commit()
     return {"message": "Customer updated.", "customer_id": user.id}
