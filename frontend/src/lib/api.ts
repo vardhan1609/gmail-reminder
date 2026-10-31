@@ -195,7 +195,7 @@ export const api = {
 
   // Auth
   register: (body: { email: string; password: string; full_name?: string; terms_accepted: boolean; marketing_opt_in?: boolean }) =>
-    request<{ message: string; user_id: string; verification_token?: string }>("/auth/register", {
+    request<{ message: string }>("/auth/register", {
       method: "POST",
       body: JSON.stringify(body),
     }),
@@ -220,7 +220,7 @@ export const api = {
     }),
 
   forgotPassword: (email: string) =>
-    request<{ message: string; reset_token?: string }>("/auth/forgot-password", {
+    request<{ message: string }>("/auth/forgot-password", {
       method: "POST",
       body: JSON.stringify({ email }),
     }),
