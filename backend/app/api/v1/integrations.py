@@ -20,6 +20,7 @@ from app.config import settings
 from app.database.db import get_db_session
 from app.middleware.auth import get_current_user, verify_resource_ownership
 from app.models.db_models import (
+    AccountModel,
     GmailConnectionModel,
     NotificationIntegrationModel,
     NotificationPreferencesModel,
@@ -249,20 +250,25 @@ def disconnect_gmail(
             detail="Gmail connection not found.",
         )
 
-    # Safely delete token file
-    if conn.token_path and os.path.exists(conn.token_path):
-        try:
-            os.remove(conn.token_path)
-        except OSError:
-            pass
+    # A repeated disconnect is safe: the authenticated user's resource is already absent.
+    if not conn:
+        return {"message": "Gmail account disconnected successfully."}
 
-    # Clean up corresponding legacy account and sync state so it does not ghost-poll or resurrect
+    token_path = conn.token_path
+    connection_email = conn.email
+
+    # Remove only this user's legacy row (or an unclaimed legacy row). Never
+    # delete another tenant's account merely because it shares an email value.
     db.query(AccountModel).filter(
-        (AccountModel.user_id == current_user.id) | (AccountModel.email == conn.email)
+        (AccountModel.user_id == current_user.id)
+        | (
+            (AccountModel.user_id.is_(None))
+            & (AccountModel.email == connection_email)
+        )
     ).delete(synchronize_session=False)
 
     db.query(SyncStateModel).filter(
-        SyncStateModel.account_identifier == conn.email
+        SyncStateModel.account_identifier == connection_email
     ).delete(synchronize_session=False)
 
     db.delete(conn)
@@ -270,9 +276,18 @@ def disconnect_gmail(
         db,
         event_type="gmail_disconnected",
         user_id=current_user.id,
-        details={"email": conn.email},
+        details={"email": connection_email},
     )
+    # Commit database cleanup before deleting the credential file. If the
+    # transaction fails, the still-valid token remains available for retry.
     db.commit()
+
+    if token_path and os.path.exists(token_path):
+        try:
+            os.remove(token_path)
+        except OSError:
+            logger.warning("Could not remove Gmail token file after disconnect for user %s", current_user.id)
+
     return {"message": "Gmail account disconnected successfully."}
 
 
