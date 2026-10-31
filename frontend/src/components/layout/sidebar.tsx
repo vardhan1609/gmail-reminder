@@ -1,11 +1,11 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Inbox, Clock, Bell, Plug, Sliders, ShieldCheck, Smartphone, LayoutDashboard, LogOut, Mail } from "lucide-react";
+import { Inbox, Clock, Bell, Plug, Sliders, ShieldCheck, Smartphone, LayoutDashboard, LogOut, Mail, CreditCard, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
 const NAV_ITEMS = [
-{label:"Dashboard",href:"/dashboard",icon:LayoutDashboard},{label:"Emails",href:"/dashboard/emails",icon:Inbox},{label:"Reminders",href:"/dashboard/reminders",icon:Clock},{label:"Notifications",href:"/dashboard/notifications",icon:Bell},{label:"Integrations",href:"/dashboard/integrations",icon:Plug},{label:"Notification Rules",href:"/dashboard/settings",icon:Sliders},{label:"Security & MFA",href:"/dashboard/security",icon:ShieldCheck},{label:"Active Sessions",href:"/dashboard/sessions",icon:Smartphone}
+{label:"Dashboard",href:"/dashboard",icon:LayoutDashboard},{label:"Emails",href:"/dashboard/emails",icon:Inbox},{label:"Reminders",href:"/dashboard/reminders",icon:Clock},{label:"Notifications",href:"/dashboard/notifications",icon:Bell},{label:"Integrations",href:"/dashboard/integrations",icon:Plug},{label:"Notification Rules",href:"/dashboard/settings",icon:Sliders},{label:"Security & MFA",href:"/dashboard/security",icon:ShieldCheck},{label:"Active Sessions",href:"/dashboard/sessions",icon:Smartphone},{label:"Subscription",href:"/dashboard/billing",icon:CreditCard}
 ];
 export function Sidebar(){
 const pathname=usePathname(); const {user,logout}=useAuth();
