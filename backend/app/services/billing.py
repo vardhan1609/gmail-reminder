@@ -53,7 +53,10 @@ def get_active_subscription(db, user_id: str) -> SubscriptionModel:
         .order_by(SubscriptionModel.created_at.desc())
         .first()
     )
-    if sub and sub.current_period_end > now:
+    period_end = sub.current_period_end if sub else None
+    if period_end and period_end.tzinfo is None:
+        period_end = period_end.replace(tzinfo=timezone.utc)
+    if sub and period_end > now:
         return sub
     # Basic is the default entry tier until a paid plan is purchased.
     if sub:
