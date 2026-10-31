@@ -116,7 +116,7 @@ class SessionResponse(BaseModel):
 def register(req: RegisterRequest, request: Request, db: Session = Depends(get_db_session)):
     """Register a new user account with Argon2id password hashing and email verification."""
     email_clean = req.email.lower().strip()
-    client_ip = request.client.host if request.client else "unknown"
+    client_ip = auth_service.get_client_ip(request)
     allowed, cooldown = auth_service.check_audit_rate_limit(
         db, "registration_attempt", client_ip, max_attempts=10
     )
@@ -196,7 +196,7 @@ def register(req: RegisterRequest, request: Request, db: Session = Depends(get_d
     except Exception:
         logger.error("Unable to send verification email for newly registered user %s", new_user.id)
 
-    client_ip = request.client.host if request.client else None
+    client_ip = auth_service.get_client_ip(request)
     user_agent = request.headers.get("user-agent")
     auth_service.log_audit_event(
         db, event_type="user_registered", user_id=new_user.id, details={"email": email_clean}
@@ -327,7 +327,7 @@ def logout(
                 db,
                 event_type="logout",
                 user_id=user.id,
-                ip_address=request.client.host if request.client else None,
+                ip_address=auth_service.get_client_ip(request),
                 user_agent=request.headers.get("user-agent"),
             )
 
@@ -410,7 +410,7 @@ def reset_password(
     db: Session = Depends(get_db_session),
 ):
     """Reset password using a single-use token and invalidate all active sessions."""
-    client_ip = request.client.host if request.client else None
+    client_ip = auth_service.get_client_ip(request)
     user_agent = request.headers.get("user-agent")
 
     success, err_msg = auth_service.reset_password_with_token(
