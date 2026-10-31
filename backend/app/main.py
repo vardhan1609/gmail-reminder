@@ -162,7 +162,7 @@ async def add_security_headers(request: Request, call_next):
     response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
     response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
     if settings.environment.lower() == "production":
-        response.headers.setdefault("Content-Security-Policy", "default-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'; object-src 'none'")
+        response.headers.setdefault("Content-Security-Policy", "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'; object-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https: wss:")
         if request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https":
             response.headers.setdefault("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload")
     return response
