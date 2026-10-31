@@ -221,6 +221,8 @@ def handle_gmail_callback(
         db.commit()
         db.refresh(conn)
         return {"message": f"Successfully connected {user_email}.", "connection_id": conn.id}
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.error("Gmail OAuth callback failed for user %s: %s", current_user.id, exc)
         raise HTTPException(
