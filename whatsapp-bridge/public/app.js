@@ -155,6 +155,10 @@ async function saveMeta(e) {
     showToast("Phone Number ID and Business Token are required.", "error");
     return;
   }
+  if (verifyToken.length < 32) {
+    showToast("Webhook Verify Token must contain at least 32 characters.", "error");
+    return;
+  }
 
   const btn = document.getElementById("btnSaveMeta");
   btn.disabled = true;
