@@ -208,7 +208,7 @@ async function testMetaConnection() {
   try {
     const res = await fetch("/api/test-meta", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: bridgeAuthHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({ phoneNumberId, businessToken }),
     });
 
