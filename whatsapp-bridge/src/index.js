@@ -117,20 +117,29 @@ app.post("/api/configure", requireAuth, (req, res) => {
         .status(400)
         .json({ error: "phoneNumberId and businessToken are required" });
     }
+    if (
+      typeof verifyToken !== "string" ||
+      verifyToken.trim().length < 32 ||
+      verifyToken.trim().toLowerCase() === "change-me-webhook"
+    ) {
+      return res.status(400).json({
+        error: "A unique webhook verify token of at least 32 characters is required",
+      });
+    }
 
-    // Save to config file
+    // Save only a strong, operator-supplied verification token.
     saveConfig({
       mode: "meta",
       phoneNumberId,
       businessToken,
-      verifyToken: verifyToken || "change-me-webhook",
+      verifyToken: verifyToken.trim(),
     });
 
-    // Update env vars in-process for hot-reload
+    // Update env vars in-process for hot-reload.
     process.env.WHATSAPP_API_MODE = "meta";
     process.env.WHATSAPP_PHONE_NUMBER_ID = phoneNumberId;
     process.env.WHATSAPP_BUSINESS_TOKEN = businessToken;
-    if (verifyToken) process.env.WHATSAPP_VERIFY_TOKEN = verifyToken;
+    process.env.WHATSAPP_VERIFY_TOKEN = verifyToken.trim();
 
     // If we're currently not in meta mode, we need a restart
     if (currentMode !== "meta") {
@@ -144,7 +153,7 @@ app.post("/api/configure", requireAuth, (req, res) => {
       // Already in meta mode — update live refs
       metaConfig.phoneNumberId = phoneNumberId;
       metaConfig.businessToken = businessToken;
-      metaConfig.verifyToken = verifyToken || metaConfig.verifyToken;
+      metaConfig.verifyToken = verifyToken.trim();
       metaConfig.graphUrl = `https://graph.facebook.com/${metaConfig.graphApiVersion}/${phoneNumberId}/messages`;
       isReady = true;
 
