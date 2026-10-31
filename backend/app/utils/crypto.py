@@ -6,7 +6,9 @@ import hashlib
 import os
 from pathlib import Path
 from typing import Optional
-from cryptography.fernet import Fernet
+from cryptography.fernet import Fernet, InvalidToken
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
 from app.config import settings
 from app.utils.logger import get_logger
@@ -22,11 +24,16 @@ def _get_fernet() -> Optional[Fernet]:
         return _fernet_instance
 
     key = settings.google_token_encryption_key or settings.secret_key
-    if not key:
-        key = "default-insecure-encryption-key-for-dev"
+    if not key or key.lower().startswith("change-me"):
+        raise RuntimeError("A strong GOOGLE_TOKEN_ENCRYPTION_KEY or SECRET_KEY must be configured.")
 
-    # Derive 32 url-safe base64-encoded bytes from key
-    derived_bytes = hashlib.sha256(key.encode("utf-8")).digest()
+    # HKDF separates the token-encryption key from other application-secret uses.
+    derived_bytes = HKDF(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=b"gmail-reminder-token-encryption-v1",
+        info=b"oauth-token-at-rest",
+    ).derive(key.encode("utf-8"))
     fernet_key = base64.urlsafe_b64encode(derived_bytes)
     try:
         _fernet_instance = Fernet(fernet_key)
@@ -37,25 +44,26 @@ def _get_fernet() -> Optional[Fernet]:
 
 
 def encrypt_data(plaintext: str) -> str:
-    """Encrypt a string payload using Fernet symmetric encryption."""
-    fernet = _get_fernet()
-    if not fernet:
-        return plaintext
-    encrypted = fernet.encrypt(plaintext.encode("utf-8"))
-    return encrypted.decode("utf-8")
+    """Encrypt with the versioned HKDF-derived Fernet key; never persist plaintext on failure."""
+    return _get_fernet().encrypt(plaintext.encode("utf-8")).decode("utf-8")
 
 
 def decrypt_data(ciphertext: str) -> str:
-    """Decrypt a ciphertext string back to plaintext. Falls back gracefully if unencrypted."""
-    fernet = _get_fernet()
-    if not fernet:
+    """Decrypt new HKDF ciphertexts and legacy SHA-256 ciphertexts during key migration."""
+    if not ciphertext.startswith("gAAAA"):
+        # Explicit compatibility for historical plaintext JSON tokens.
         return ciphertext
     try:
-        decrypted = fernet.decrypt(ciphertext.encode("utf-8"))
-        return decrypted.decode("utf-8")
-    except Exception:
-        # If it's already plaintext (e.g. from before encryption was enabled), return as-is
-        return ciphertext
+        return _get_fernet().decrypt(ciphertext.encode("utf-8")).decode("utf-8")
+    except InvalidToken:
+        # Read-only fallback for tokens encrypted by the previous SHA-256 derivation.
+        key = settings.google_token_encryption_key or settings.secret_key
+        legacy_key = base64.urlsafe_b64encode(hashlib.sha256(key.encode("utf-8")).digest())
+        try:
+            return Fernet(legacy_key).decrypt(ciphertext.encode("utf-8")).decode("utf-8")
+        except InvalidToken as exc:
+            logger.error("Stored OAuth token could not be decrypted with current or legacy key.")
+            raise ValueError("Stored OAuth token cannot be decrypted; verify GOOGLE_TOKEN_ENCRYPTION_KEY.") from exc
 
 
 def save_secure_token(token_path: Path, token_json: str) -> None:
