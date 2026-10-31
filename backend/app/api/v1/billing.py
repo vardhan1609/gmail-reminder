@@ -195,12 +195,16 @@ def admin_overview(
     admin: UserModel = Depends(require_admin),
     db: Session = Depends(get_db_session),
 ):
-    active_subs = db.query(SubscriptionModel).filter(SubscriptionModel.status == "active").all()
+    total_customers = db.query(func.count(UserModel.id)).scalar() or 0
+    premium_customers = db.query(func.count(SubscriptionModel.id)).filter(
+        SubscriptionModel.status == "active",
+        SubscriptionModel.plan_code == "premium",
+    ).scalar() or 0
     return {
-        "customers": db.query(func.count(UserModel.id)).scalar() or 0,
-        "active_subscriptions": len(active_subs),
-        "basic_customers": sum(1 for s in active_subs if s.plan_code == "basic"),
-        "premium_customers": sum(1 for s in active_subs if s.plan_code == "premium"),
+        "customers": total_customers,
+        "active_subscriptions": total_customers,
+        "basic_customers": max(0, total_customers - premium_customers),
+        "premium_customers": premium_customers,
         "paid_orders": db.query(func.count(PaymentOrderModel.id)).filter(PaymentOrderModel.status == "paid").scalar() or 0,
         "pending_orders": db.query(func.count(PaymentOrderModel.id)).filter(PaymentOrderModel.status.in_(["created", "creating"])).scalar() or 0,
     }
