@@ -53,7 +53,18 @@ def _register_and_login_user(client, email="ws_user@example.com", password="Vali
             "terms_accepted": True,
     })
     assert reg.status_code in (200, 201), reg.text
-    user_id = reg.json().get("user_id") or reg.json().get("user", {}).get("id")
+    # Registration intentionally returns a generic response to avoid
+    # disclosing whether an email address already has an account. Resolve the
+    # test user's ID from the test database instead of expecting it in the API
+    # response.
+    db = session_module.SessionLocal()
+    try:
+        user = db.query(UserModel).filter(UserModel.email == email.lower()).first()
+        assert user is not None, f"Test user {email} was not created"
+        user_id = user.id
+    finally:
+        db.close()
+
     login = client.post("/api/v1/auth/login", json={
         "email": email,
         "password": password,
