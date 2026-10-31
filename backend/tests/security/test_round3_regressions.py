@@ -108,3 +108,34 @@ def test_cashfree_webhook_accepts_fresh_signed_timestamp(monkeypatch):
             "x-webhook-signature": signature,
         },
     )
+
+
+def test_scheduler_does_not_claim_ownerless_mailbox_by_email(monkeypatch):
+    """An orphaned mailbox is quarantined, even when its email matches a user."""
+    from app.services import scheduler
+
+    db = SimpleNamespace(
+        accounts=SimpleNamespace(
+            find=lambda query: [
+                {
+                    "email": "user-a@example.com",
+                    "user_id": None,
+                    "token_path": "/tmp/legacy-token.json",
+                    "active": True,
+                }
+            ]
+        )
+    )
+    billing_session = Mock()
+    monkeypatch.setattr(
+        "app.database.session.SessionLocal", lambda: billing_session
+    )
+    sync = Mock()
+    monkeypatch.setattr(scheduler, "sync_messages_incremental", sync)
+
+    scheduler._poll_all_accounts(
+        db, user_id="user-a", user_email="user-a@example.com"
+    )
+
+    sync.assert_not_called()
+    billing_session.close.assert_called_once()
