@@ -68,6 +68,7 @@ def create_checkout(
     if price <= 0:
         raise HTTPException(status_code=400, detail=f"{req.plan_code.title()} plan has no payment price configured.")
     provider = req.provider or settings.payment_provider
+    provider = provider.lower()
     try:
         adapter = get_payment_adapter(provider)
     except ValueError as exc:
@@ -138,18 +139,29 @@ async def payment_webhook(provider: str, request: Request, db: Session = Depends
     external_id = None
     payment_id = None
     paid = False
+    reported_amount_paise = None
+    reported_currency = None
     if provider == "razorpay":
         event = payload.get("event")
         entity = payload.get("payload", {})
         if event == "payment_link.paid":
             external_id = (entity.get("payment_link", {}).get("entity", {}) or {}).get("id")
             payment_id = (entity.get("payment", {}).get("entity", {}) or {}).get("id")
+            link_entity = (entity.get("payment_link", {}).get("entity", {}) or {})
+            reported_amount_paise = link_entity.get("amount")
+            reported_currency = link_entity.get("currency")
             paid = True
     else:
         data = payload.get("data", {})
         external_id = data.get("link_id") or (data.get("link", {}) or {}).get("link_id")
         payment = data.get("payment", {}) or {}
         payment_id = payment.get("cf_payment_id")
+        link_entity = data.get("link", {}) or {}
+        raw_amount = link_entity.get("link_amount", data.get("link_amount"))
+        if raw_amount is not None:
+            from decimal import Decimal
+            reported_amount_paise = int(Decimal(str(raw_amount)) * 100)
+        reported_currency = link_entity.get("link_currency", data.get("link_currency"))
         paid = str(data.get("link_status", "")).upper() == "PAID" or str(payment.get("payment_status", "")).upper() == "SUCCESS"
 
     if not external_id:
@@ -161,6 +173,16 @@ async def payment_webhook(provider: str, request: Request, db: Session = Depends
     if not order:
         return {"received": True, "processed": False}
     if paid:
+        if reported_amount_paise is not None and int(reported_amount_paise) != order.amount_paise:
+            order.status = "review"
+            order.raw_webhook = body.decode("utf-8")[:20000]
+            db.commit()
+            return {"received": True, "processed": False}
+        if reported_currency and str(reported_currency).upper() != order.currency.upper():
+            order.status = "review"
+            order.raw_webhook = body.decode("utf-8")[:20000]
+            db.commit()
+            return {"received": True, "processed": False}
         activate_paid_subscription(db, order, str(payment_id) if payment_id else None)
     else:
         order.raw_webhook = body.decode("utf-8")[:20000]
