@@ -41,7 +41,12 @@ jobs:
           cd backend
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pytest pytest-asyncio
+          pip install pytest pytest-asyncio pip-audit
+
+      - name: Audit Python dependencies
+        run: |
+          cd backend
+          pip-audit -r requirements.txt
 
       - name: Run database migrations
         env:
@@ -65,10 +70,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Node.js 20
+      - name: Set up Node.js 22.12
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: "22.12"
           cache: "npm"
           cache-dependency-path: frontend/package.json
 
@@ -77,8 +82,37 @@ jobs:
           cd frontend
           npm ci
 
+      - name: Audit frontend dependencies
+        run: |
+          cd frontend
+          npm audit --audit-level=high
+
       - name: Build Next.js production bundle
         run: |
           cd frontend
           npm run build
+
+  whatsapp-bridge-audit:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22.12
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.12"
+          cache: "npm"
+          cache-dependency-path: whatsapp-bridge/package-lock.json
+
+      - name: Install WhatsApp bridge dependencies
+        run: |
+          cd whatsapp-bridge
+          npm ci --omit=dev
+
+      - name: Audit WhatsApp bridge dependencies
+        run: |
+          cd whatsapp-bridge
+          npm audit --omit=dev --audit-level=high
 

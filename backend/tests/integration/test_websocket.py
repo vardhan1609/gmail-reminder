@@ -54,16 +54,12 @@ def _register_and_login_user(client, email="ws_user@example.com", password="Vali
     })
     assert reg.status_code in (200, 201), reg.text
     user_id = reg.json().get("user_id") or reg.json().get("user", {}).get("id")
-    token = reg.json().get("verification_token")
-    if token:
-        client.post(f"/api/v1/auth/verify-email?token={token}")
-
     login = client.post("/api/v1/auth/login", json={
         "email": email,
         "password": password,
     })
     assert login.status_code == 200, login.text
-    raw_token = login.json()["token"]
+    raw_token = login.cookies.get(settings.session_cookie_name)
     return user_id, raw_token
 
 

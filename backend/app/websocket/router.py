@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import re
 import time
 import uuid
 from datetime import datetime, timezone
@@ -49,8 +48,6 @@ router = APIRouter(tags=["WebSockets"])
 # Limits & Protections
 MAX_MESSAGE_BYTES = 65536  # 64 KB
 MAX_CLIENT_MESSAGES_PER_MINUTE = 30
-ORIGIN_REGEX = re.compile(r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$", re.IGNORECASE)
-
 
 def is_origin_allowed(origin: Optional[str]) -> bool:
     """
@@ -58,8 +55,8 @@ def is_origin_allowed(origin: Optional[str]) -> bool:
     to prevent Cross-Site WebSocket Hijacking (CSWSH).
     """
     if not origin:
-        # In non-browser test environments or direct clients Origin may be absent
-        return True
+        # Browsers send Origin during WebSocket handshakes; production rejects missing Origin.
+        return settings.environment.lower() != "production"
 
     clean_origin = origin.rstrip("/").lower()
 
@@ -68,19 +65,13 @@ def is_origin_allowed(origin: Optional[str]) -> bool:
         if clean_origin == allowed.rstrip("/").lower():
             return True
 
-    # Check localhost regex pattern
-    if ORIGIN_REGEX.match(clean_origin):
-        return True
-
     return False
 
 
 def extract_ws_token(websocket: WebSocket) -> Optional[str]:
     """
-    Extracts raw session token from:
-    1. HttpOnly session cookie (primary)
-    2. Sec-WebSocket-Protocol or Authorization header
-    3. Query parameter 'token'
+    Extracts session token from the HttpOnly cookie or Authorization header.
+    Query-string tokens are intentionally unsupported to prevent URL/access-log leaks.
     """
     # 1. Cookie
     cookie_token = websocket.cookies.get(settings.session_cookie_name)
@@ -100,11 +91,6 @@ def extract_ws_token(websocket: WebSocket) -> Optional[str]:
     auth_header = websocket.headers.get("authorization")
     if auth_header and auth_header.startswith("Bearer "):
         return auth_header.split(" ", 1)[1].strip()
-
-    # 3. Query string fallback
-    query_token = websocket.query_params.get("token")
-    if query_token:
-        return query_token
 
     return None
 

@@ -9,7 +9,7 @@ RUN apt-get update && apt-get install -y \
     libnss3 libatk-bridge2.0-0 libx11-xcb1 libxcomposite1 libxdamage1 \
     libxrandr2 libgbm1 libasound2 libpangocairo-1.0-0 libgtk-3-0 \
     --no-install-recommends && \
-    curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+    curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
     apt-get install -y nodejs && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
@@ -25,14 +25,19 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy WhatsApp bridge code and install Node dependencies
 COPY whatsapp-bridge ./whatsapp-bridge
-RUN cd whatsapp-bridge && npm install --omit=dev
+RUN cd whatsapp-bridge && npm ci --omit=dev --no-audit
 
 # Copy FastAPI backend code and migration configuration
 COPY backend/app ./app
 COPY backend/alembic ./alembic
 COPY backend/alembic.ini ./alembic.ini
 
-RUN mkdir -p logs
+RUN groupadd --system appuser && useradd --system --gid appuser --create-home appuser && \
+    mkdir -p logs tokens data whatsapp-bridge/session && \
+    chown -R appuser:appuser /app
+
+ENV NODE_ENV=production
+USER appuser
 
 EXPOSE 8000
 

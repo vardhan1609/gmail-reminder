@@ -46,6 +46,10 @@ MAX_FAILED_ATTEMPTS = 5
 LOCKOUT_WINDOW_SECONDS = 900  # 15 minutes
 
 
+# Used to keep unknown-account password checks on the Argon2 path.
+_DUMMY_PASSWORD_HASH = _ph.hash("dummy-password-not-a-real-account")
+
+
 def hash_password(password: str) -> str:
     """Hash password using Argon2id."""
     return _ph.hash(password)
@@ -103,6 +107,37 @@ def check_rate_limit(key: str) -> Tuple[bool, int]:
             cooldown = int(LOCKOUT_WINDOW_SECONDS - (now - oldest))
             return False, max(1, cooldown)
         return True, 0
+
+
+def get_client_ip(request) -> str:
+    """Resolve the client IP from the reverse-proxy header set by trusted Caddy."""
+    forwarded = request.headers.get("x-forwarded-for", "")
+    if forwarded:
+        return forwarded.split(",", 1)[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+def check_audit_rate_limit(
+    db: Session,
+    event_type: str,
+    ip_address: str,
+    max_attempts: int = 20,
+    window_seconds: int = 900,
+) -> Tuple[bool, int]:
+    """Shared per-IP request limiter backed by audit rows (works across workers)."""
+    if not ip_address or ip_address == "unknown":
+        return False, window_seconds
+    since = datetime.now(timezone.utc) - timedelta(seconds=window_seconds)
+    count = (
+        db.query(AuditEventModel)
+        .filter(
+            AuditEventModel.event_type == event_type,
+            AuditEventModel.ip_address == ip_address,
+            AuditEventModel.created_at >= since,
+        )
+        .count()
+    )
+    return (False, window_seconds) if count >= max_attempts else (True, 0)
 
 
 def record_failed_attempt(key: str) -> None:

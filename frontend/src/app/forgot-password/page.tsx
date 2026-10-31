@@ -12,7 +12,6 @@ export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const [resetToken, setResetToken] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -24,9 +23,6 @@ export default function ForgotPasswordPage() {
     try {
       const res = await api.forgotPassword(email);
       setMessage(res.message);
-      if (res.reset_token) {
-        setResetToken(res.reset_token);
-      }
     } catch (err: any) {
       setError(err.detail || "Request failed.");
     } finally {
@@ -42,7 +38,7 @@ export default function ForgotPasswordPage() {
             <KeyRound className="h-6 w-6" />
           </div>
           <CardTitle className="text-2xl font-bold">Password Recovery</CardTitle>
-          <CardDescription>Enter your account email to receive reset instructions</CardDescription>
+          <CardDescription>Enter your account email. We’ll email a secure reset link when the address is registered.</CardDescription>
         </CardHeader>
 
         <form onSubmit={handleSubmit}>
@@ -60,20 +56,6 @@ export default function ForgotPasswordPage() {
                   <CheckCircle2 className="h-4 w-4 shrink-0" />
                   <span>{message}</span>
                 </div>
-                {resetToken && (
-                  <div className="pt-2 border-t border-emerald-200 dark:border-emerald-900/60">
-                    <p className="text-xs text-muted-foreground mb-1">Your Reset Token:</p>
-                    <code className="block p-1.5 bg-background text-foreground text-xs font-mono rounded border border-border select-all">
-                      {resetToken}
-                    </code>
-                    <Link
-                      href={`/reset-password?token=${encodeURIComponent(resetToken)}`}
-                      className="mt-2 inline-block text-xs font-semibold text-primary hover:underline"
-                    >
-                      Click here to reset password now →
-                    </Link>
-                  </div>
-                )}
               </div>
             )}
 

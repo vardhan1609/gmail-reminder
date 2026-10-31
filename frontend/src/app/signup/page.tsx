@@ -47,7 +47,7 @@ export default function SignupPage() {
       });
 
       // Redirect to verification view
-      router.push(`/verify-email?email=${encodeURIComponent(email)}&token=${res.verification_token || ""}`);
+      router.push(`/verify-email?email=${encodeURIComponent(email)}`);
     } catch (err: any) {
       setError(err.detail || "Registration failed. Please check your information.");
     } finally {

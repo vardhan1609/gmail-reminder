@@ -6,7 +6,7 @@ from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.database.db import get_db
-from app.middleware.auth import require_api_key, get_optional_current_user
+from app.middleware.auth import get_current_user
 from app.models.db_models import UserModel
 from app.models.reminder import ReminderStatus
 from app.schemas.reminders import ReminderResponse, ReminderListResponse, ReminderResendResponse
@@ -18,18 +18,17 @@ logger = get_logger(__name__)
 router = APIRouter(prefix="/reminders", tags=["Reminders V1"])
 
 
-@router.get("", response_model=ReminderListResponse, dependencies=[Depends(require_api_key)])
+@router.get("", response_model=ReminderListResponse)
 def list_reminders(
     limit: int = Query(50, ge=1, le=100),
     skip: int = Query(0, ge=0),
     status_filter: Optional[str] = Query(None, alias="status"),
-    current_user: Optional[UserModel] = Depends(get_optional_current_user),
+    current_user: UserModel = Depends(get_current_user),
     db=Depends(get_db),
 ):
     """List scheduled reminders with status filter and pagination."""
-    filter_dict = {}
-    if current_user and not current_user.is_admin:
-        filter_dict["user_id"] = current_user.id
+    # Tenant scope is mandatory; never return unowned/orphan legacy records.
+    filter_dict = {"user_id": current_user.id}
     if status_filter:
         filter_dict["status"] = status_filter
 
@@ -57,26 +56,22 @@ def list_reminders(
     return ReminderListResponse(reminders=items, total=total, limit=limit, skip=skip)
 
 
-@router.post("/{id}/resend", response_model=ReminderResendResponse, dependencies=[Depends(require_api_key)])
+@router.post("/{id}/resend", response_model=ReminderResendResponse)
 def resend_reminder(
     id: str,
-    current_user: Optional[UserModel] = Depends(get_optional_current_user),
+    current_user: UserModel = Depends(get_current_user),
     db=Depends(get_db),
 ):
     """Retry or resend a reminder immediately."""
-    reminder = db.reminders.find_one({"id": id}) or db.reminders.find_one({"_id": id})
+    reminder = db.reminders.find_one({"id": id, "user_id": current_user.id}) or db.reminders.find_one({"_id": id, "user_id": current_user.id})
     if not reminder:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reminder not found")
 
-    if current_user and not current_user.is_admin:
-        rem_user_id = reminder.get("user_id")
-        if rem_user_id and rem_user_id != current_user.id:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reminder not found")
 
     dest_id = reminder.get("destination_id")
-    dest = db.destinations.find_one({"id": dest_id}) or db.destinations.find_one({"_id": dest_id})
+    dest = db.destinations.find_one({"id": dest_id, "user_id": current_user.id}) or db.destinations.find_one({"_id": dest_id, "user_id": current_user.id})
     if not dest:
-        dest = db.destinations.find_one({"is_default": True})
+        dest = db.destinations.find_one({"is_default": True, "user_id": current_user.id})
 
     if not dest:
         raise HTTPException(status_code=400, detail="No active destination associated with this reminder")
@@ -94,12 +89,12 @@ def resend_reminder(
         notification_type="reminder_resend",
         message=message,
         idempotency_key=resend_key,
-        user_id=reminder.get("user_id") or (current_user.id if current_user else None),
+        user_id=current_user.id,
     )
 
     if success:
         db.reminders.update_one(
-            {"id": id},
+            {"id": id, "user_id": current_user.id},
             {"$set": {
                 "status": ReminderStatus.sent.value,
                 "sent_at": datetime.now(timezone.utc),
@@ -109,7 +104,7 @@ def resend_reminder(
         return ReminderResendResponse(id=id, status="sent", message="Reminder delivered successfully")
     else:
         db.reminders.update_one(
-            {"id": id},
+            {"id": id, "user_id": current_user.id},
             {"$set": {
                 "status": ReminderStatus.failed.value,
                 "last_error": err,

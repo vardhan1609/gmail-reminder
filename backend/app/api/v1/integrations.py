@@ -6,11 +6,13 @@ test message dispatching, and user notification preferences.
 from __future__ import annotations
 
 import os
+import hmac
+import secrets
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -18,7 +20,6 @@ from app.config import settings
 from app.database.db import get_db_session
 from app.middleware.auth import get_current_user, verify_resource_ownership
 from app.models.db_models import (
-    AccountModel,
     GmailConnectionModel,
     NotificationIntegrationModel,
     NotificationPreferencesModel,
@@ -110,33 +111,8 @@ def list_gmail_connections(
         .order_by(GmailConnectionModel.created_at.desc())
         .all()
     )
-    if not connections:
-        acc = (
-            db.query(AccountModel)
-            .filter(
-                AccountModel.active == True,
-                (AccountModel.user_id == current_user.id)
-                | (AccountModel.email == current_user.email),
-            )
-            .first()
-        )
-        if acc and acc.token_path and os.path.isfile(acc.token_path):
-            now = datetime.now(timezone.utc)
-            conn = GmailConnectionModel(
-                user_id=current_user.id,
-                email=acc.email,
-                label=acc.label or "Primary Gmail",
-                token_path=acc.token_path,
-                active=acc.active,
-                calendar_sync_enabled=acc.calendar_sync_enabled,
-                created_at=acc.created_at or now,
-                updated_at=now,
-            )
-            db.add(conn)
-            acc.user_id = current_user.id
-            db.commit()
-            db.refresh(conn)
-            connections = [conn]
+    # Do not auto-claim legacy records by email address. Legacy rows must be
+    # migrated by an administrator after independent ownership verification.
 
     for c in connections:
         if not c.last_sync_at:
@@ -150,21 +126,42 @@ def list_gmail_connections(
 
 @router.get("/gmail/auth-url")
 def get_gmail_auth_url(
+    response: Response,
     current_user: UserModel = Depends(get_current_user),
 ):
-    """Generate Google OAuth 2.0 authorization URL for this user."""
-    auth_url, _state = build_auth_url(state=f"user_{current_user.id}")
+    """Generate a URL with a browser-bound, one-time CSRF state nonce."""
+    oauth_state = secrets.token_urlsafe(32)
+    response.set_cookie(
+        key="gmail_oauth_state",
+        value=oauth_state,
+        httponly=True,
+        secure=settings.cookie_secure,
+        samesite="lax",
+        max_age=600,
+        path="/api/v1/integrations/gmail/callback",
+    )
+    auth_url, _ = build_auth_url(state=oauth_state)
     return {"auth_url": auth_url}
 
 
 @router.get("/gmail/callback")
 def handle_gmail_callback(
+    request: Request,
+    response: Response,
     code: str = Query(...),
     state: Optional[str] = Query(None),
     current_user: UserModel = Depends(get_current_user),
     db: Session = Depends(get_db_session),
 ):
     """Handle OAuth redirect callback and persist user's Gmail connection."""
+    expected_state = request.cookies.get("gmail_oauth_state", "")
+    if not state or not expected_state or not hmac.compare_digest(state, expected_state):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired OAuth state. Restart the Google connection flow.",
+        )
+    response.delete_cookie("gmail_oauth_state", path="/api/v1/integrations/gmail/callback")
+
     try:
         user_email, token_path = exchange_code_for_token(code)
 
@@ -227,7 +224,7 @@ def handle_gmail_callback(
         logger.error("Gmail OAuth callback failed for user %s: %s", current_user.id, exc)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Failed to connect Gmail account: {str(exc)}",
+            detail="Failed to connect Gmail account. Please restart the connection flow.",
         )
 
 

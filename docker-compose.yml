@@ -3,10 +3,10 @@ services:
     image: postgres:16-alpine
     container_name: gmail-reminder-postgres
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-gmail_user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-gmail_password}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
       POSTGRES_DB: ${POSTGRES_DB:-gmail_reminder}
     volumes:
       - pg_data:/var/lib/postgresql/data
@@ -23,10 +23,10 @@ services:
       dockerfile: backend/Dockerfile
     container_name: gmail-reminder-backend
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     env_file: .env
     environment:
-      - DATABASE_URL=${DATABASE_URL:-postgresql://gmail_user:gmail_password@postgres:5432/gmail_reminder}
+      - DATABASE_URL=${DATABASE_URL:?Set DATABASE_URL in .env}
       - WHATSAPP_SERVICE_URL=http://localhost:3000
     volumes:
       - ./data:/app/data
@@ -44,7 +44,7 @@ services:
       dockerfile: Dockerfile
     container_name: gmail-reminder-frontend
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     environment:
       - NEXT_PUBLIC_API_URL=http://backend:8000/api/v1
     depends_on:

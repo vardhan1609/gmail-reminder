@@ -28,14 +28,19 @@
  */
 const express = require("express");
 const path = require("path");
+const crypto = require("crypto");
 const fs = require("fs");
 const readline = require("readline");
 
 const PORT = process.env.PORT || 3000;
-const SERVICE_TOKEN = process.env.WHATSAPP_SERVICE_TOKEN || "change-me";
+const SERVICE_TOKEN = process.env.WHATSAPP_SERVICE_TOKEN || "";
+if (SERVICE_TOKEN.length < 32 || ["change-me", "changeme"].includes(SERVICE_TOKEN.toLowerCase())) {
+  throw new Error("WHATSAPP_SERVICE_TOKEN must be set to a unique random value of at least 32 characters.");
+}
 const CONFIG_FILE = path.join(__dirname, "bridge-config.json");
 
 const app = express();
+app.disable("x-powered-by");
 app.use(express.json());
 
 // Serve static files (setup UI)
@@ -71,7 +76,9 @@ function saveConfig(data) {
 function requireAuth(req, res, next) {
   const header = req.headers.authorization || "";
   const token = header.startsWith("Bearer ") ? header.slice(7) : "";
-  if (token !== SERVICE_TOKEN) {
+  const supplied = Buffer.from(token);
+  const expected = Buffer.from(SERVICE_TOKEN);
+  if (!token || supplied.length !== expected.length || !crypto.timingSafeEqual(supplied, expected)) {
     return res.status(401).json({ error: "unauthorized" });
   }
   next();
@@ -92,7 +99,7 @@ app.get("/health", (_req, res) => {
 });
 
 // QR code API (for the setup UI)
-app.get("/api/qr", (_req, res) => {
+app.get("/api/qr", requireAuth, (_req, res) => {
   res.json({
     qr: latestQRDataURL,
     authenticated: isAuthenticated,
@@ -101,7 +108,7 @@ app.get("/api/qr", (_req, res) => {
 });
 
 // Configure Meta credentials (from setup UI)
-app.post("/api/configure", (req, res) => {
+app.post("/api/configure", requireAuth, (req, res) => {
   const { mode, phoneNumberId, businessToken, verifyToken } = req.body || {};
 
   if (mode === "meta") {
@@ -149,7 +156,7 @@ app.post("/api/configure", (req, res) => {
 });
 
 // Test Meta connection (validate token by calling Graph API)
-app.post("/api/test-meta", async (req, res) => {
+app.post("/api/test-meta", requireAuth, async (req, res) => {
   const { phoneNumberId, businessToken } = req.body || {};
 
   if (!phoneNumberId || !businessToken) {
@@ -182,13 +189,13 @@ app.post("/api/test-meta", async (req, res) => {
 });
 
 // Service token endpoint (so the UI can send authenticated test messages)
-app.get("/api/token-hint", (_req, res) => {
+app.get("/api/token-hint", requireAuth, (_req, res) => {
   // Return a masked version + set a JS variable for the UI
   const masked =
     SERVICE_TOKEN.length > 8
       ? SERVICE_TOKEN.slice(0, 4) + "…" + SERVICE_TOKEN.slice(-4)
       : "****";
-  res.json({ masked, token: SERVICE_TOKEN });
+  res.json({ masked });
 });
 
 // ══════════════════════════════════════════════
@@ -204,7 +211,7 @@ function startWebJS() {
     authStrategy: new LocalAuth({ dataPath: "./session" }),
     puppeteer: {
       headless: true,
-      args: ["--no-sandbox", "--disable-setuid-sandbox"],
+      // Chromium sandbox remains enabled; the container runs as a non-root user.
     },
   });
 

@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.api import accounts, calendar, destinations, reminder, health, auth
+from app.api import health
 from app.api.v1 import api_v1_router
 from app.config import settings
 from app.database.db import close_db, init_db
@@ -117,6 +117,7 @@ async def lifespan(app: FastAPI):
     except Exception:
         pass
     logger.info("Starting up Gmail Reminder System")
+    settings.validate_security_settings()
     init_db()
     start_whatsapp_bridge()
     start_scheduler()
@@ -131,6 +132,9 @@ app = FastAPI(
     title="Gmail → WhatsApp & Telegram Notification System",
     description="Monitors Gmail mailboxes, classifies emails, and delivers notifications and reminders via WhatsApp and Telegram.",
     version="2.0.0",
+    docs_url=None if settings.environment.lower() in {"production", "prod"} else "/docs",
+    redoc_url=None if settings.environment.lower() == "production" else "/redoc",
+    openapi_url=None if settings.environment.lower() == "production" else "/openapi.json",
     lifespan=lifespan,
 )
 
@@ -138,7 +142,6 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_allowed_origins,
-    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -147,17 +150,23 @@ app.add_middleware(
 # Mount Health and Readiness probes
 app.include_router(health.router)
 
-# Mount Auth router (spec: /auth/google/login, /auth/google/callback)
-app.include_router(auth.router)
-
-# Mount V1 REST API endpoints
+# Mount only the authenticated, versioned API. Legacy Mongo-backed management
+# routers are intentionally not mounted.
 app.include_router(api_v1_router)
 
-# Mount Dashboard and Management routes
-app.include_router(accounts.router)
-app.include_router(destinations.router)
-app.include_router(calendar.router)
-app.include_router(reminder.router)
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+    if settings.environment.lower() == "production":
+        response.headers.setdefault("Content-Security-Policy", "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'; object-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https: wss:")
+        if request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https":
+            response.headers.setdefault("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload")
+    return response
+
 
 # Serve static dashboard assets
 if STATIC_DIR.exists():
@@ -176,53 +185,8 @@ def dashboard():
     index_file = STATIC_DIR / "index.html"
     if index_file.exists():
         return FileResponse(index_file)
-    return {"message": "Dashboard UI not found", "api_docs": "/docs"}
+    return {"message": "Dashboard UI not found"}
 
 
-# ══════════════════════════════════════════════
-#  WhatsApp Bridge Reverse Proxy
-# ══════════════════════════════════════════════
-
-WA_BRIDGE_URL = settings.whatsapp_service_url.rstrip("/")
-
-
-@app.api_route("/whatsapp-api/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
-async def whatsapp_proxy(path: str, request: Request):
-    """Reverse proxy requests to the WhatsApp bridge."""
-    target_url = f"{WA_BRIDGE_URL}/{path}"
-    if request.url.query:
-        target_url += f"?{request.url.query}"
-
-    body = await request.body()
-    headers = {k: v for k, v in request.headers.items() if k.lower() not in ("host", "content-length")}
-
-    try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.request(
-                method=request.method,
-                url=target_url,
-                content=body,
-                headers=headers,
-            )
-
-        excluded_headers = {"content-encoding", "transfer-encoding", "content-length"}
-        response_headers = {k: v for k, v in resp.headers.items() if k.lower() not in excluded_headers}
-
-        return Response(
-            content=resp.content,
-            status_code=resp.status_code,
-            headers=response_headers,
-            media_type=resp.headers.get("content-type"),
-        )
-    except httpx.ConnectError:
-        return Response(
-            content='{"error":"WhatsApp bridge is not reachable on port 3000"}',
-            status_code=502,
-            media_type="application/json",
-        )
-    except httpx.TimeoutException:
-        return Response(
-            content='{"error":"WhatsApp bridge timed out"}',
-            status_code=504,
-            media_type="application/json",
-        )
+# The WhatsApp bridge is an internal service and is never exposed through
+# a public reverse-proxy route. Backend services call it over the private network.

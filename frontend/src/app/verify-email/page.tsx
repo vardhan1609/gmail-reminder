@@ -65,7 +65,7 @@ function VerifyEmailForm() {
           {success
             ? "Your account has been successfully verified."
             : emailParam
-            ? `A verification token has been generated for ${emailParam}.`
+            ? `A secure verification link has been emailed to ${emailParam}. Open the link in your inbox to activate your account.`
             : "Enter your verification token to complete registration."}
         </CardDescription>
       </CardHeader>
