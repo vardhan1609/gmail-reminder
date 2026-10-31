@@ -18,7 +18,7 @@ logger = get_logger(__name__)
 _fernet_instance: Optional[Fernet] = None
 
 
-def _get_fernet() -> Optional[Fernet]:
+def _get_fernet() -> Fernet:
     global _fernet_instance
     if _fernet_instance is not None:
         return _fernet_instance
@@ -39,8 +39,8 @@ def _get_fernet() -> Optional[Fernet]:
         _fernet_instance = Fernet(fernet_key)
         return _fernet_instance
     except Exception as exc:
-        logger.warning("Could not initialize token encryption: %s", exc)
-        return None
+        logger.error("Could not initialize token encryption.")
+        raise RuntimeError("OAuth token encryption could not be initialized.") from exc
 
 
 def encrypt_data(plaintext: str) -> str:
@@ -57,13 +57,22 @@ def decrypt_data(ciphertext: str) -> str:
         return _get_fernet().decrypt(ciphertext.encode("utf-8")).decode("utf-8")
     except InvalidToken:
         # Read-only fallback for tokens encrypted by the previous SHA-256 derivation.
-        key = settings.google_token_encryption_key or settings.secret_key
-        legacy_key = base64.urlsafe_b64encode(hashlib.sha256(key.encode("utf-8")).digest())
-        try:
-            return Fernet(legacy_key).decrypt(ciphertext.encode("utf-8")).decode("utf-8")
-        except InvalidToken as exc:
-            logger.error("Stored OAuth token could not be decrypted with current or legacy key.")
-            raise ValueError("Stored OAuth token cannot be decrypted; verify GOOGLE_TOKEN_ENCRYPTION_KEY.") from exc
+        # Try both configured secrets because deployments may have moved from the
+        # application secret to a dedicated encryption secret during migration.
+        legacy_candidates = {
+            value for value in (settings.google_token_encryption_key, settings.secret_key)
+            if value and not value.lower().startswith("change-me")
+        }
+        for legacy_secret in legacy_candidates:
+            legacy_key = base64.urlsafe_b64encode(
+                hashlib.sha256(legacy_secret.encode("utf-8")).digest()
+            )
+            try:
+                return Fernet(legacy_key).decrypt(ciphertext.encode("utf-8")).decode("utf-8")
+            except InvalidToken:
+                continue
+        logger.error("Stored OAuth token could not be decrypted with current or legacy keys.")
+        raise ValueError("Stored OAuth token cannot be decrypted; verify configured encryption keys.")
 
 
 def save_secure_token(token_path: Path, token_json: str) -> None:
