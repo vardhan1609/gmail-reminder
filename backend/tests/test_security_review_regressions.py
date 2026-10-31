@@ -37,4 +37,5 @@ def test_bridge_is_authenticated_and_loopback_only():
     source = (REPO / 'whatsapp-bridge' / 'src' / 'index.js').read_text(encoding='utf-8')
     assert 'app.post("/api/configure", requireAuth' in source
     assert 'app.listen(PORT, "127.0.0.1"' in source
-    assert 'change-me-webhook' not in source
+    assert 'savedConfig.verifyToken || "change-me-webhook"' not in source
+    assert 'isStrongWebhookVerifyToken(metaConfig.verifyToken)' in source
