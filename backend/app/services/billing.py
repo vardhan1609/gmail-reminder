@@ -106,6 +106,11 @@ def reserve_notification_usage(user_id: str, idempotency_key: str, channel: str)
     db = SessionLocal()
     try:
         sub = get_active_subscription(db, user_id)
+        # Serialize quota reservations per subscription to prevent parallel sends exceeding the cap.
+        sub = db.query(SubscriptionModel).filter(
+            SubscriptionModel.user_id == user_id,
+            SubscriptionModel.status == "active",
+        ).with_for_update().order_by(SubscriptionModel.created_at.desc()).first() or sub
         plan = PLAN_CATALOG[sub.plan_code]
         if channel in ("whatsapp", "whatsapp_meta") and not plan["whatsapp"]:
             return False, "WhatsApp is available on the Premium plan. Upgrade to continue."
