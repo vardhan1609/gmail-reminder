@@ -27,7 +27,7 @@ from app.models.db_models import (
 )
 from app.services.auth_service import log_audit_event
 from app.services.gmail_service import build_auth_url, exchange_code_for_token
-from app.services.notifier import send_to_channel
+from app.services.notifier import send_to_channel, deliver_notification_idempotent
 from app.services.billing import PLAN_CATALOG, get_active_subscription
 from app.utils.logger import get_logger
 
@@ -394,17 +394,25 @@ def test_notification_integration(
             detail="Notification integration not found.",
         )
 
+    subscription = get_active_subscription(db, current_user.id)
+    if integration.type in ("whatsapp", "whatsapp_meta") and not PLAN_CATALOG[subscription.plan_code]["whatsapp"]:
+        raise HTTPException(status_code=403, detail="WhatsApp testing is available on the Premium plan.")
+
     test_text = (
-        f"🔔 *Gmail-to-Chat Alert Test*\n\n"
-        f"Hi {current_user.full_name or current_user.email}!\n"
+        f"🔔 *Gmail-to-Chat Alert Test*\\n\\n"
+        f"Hi {current_user.full_name or current_user.email}!\\n"
         f"Your {integration.type.capitalize()} notification channel is properly configured and verified."
     )
 
     try:
-        success, err = send_to_channel(
+        success, err = deliver_notification_idempotent(
+            email_id=None,
             channel=integration.type,
-            target_id=integration.target_id,
+            destination_id=integration.target_id,
+            notification_type="test",
             message=test_text,
+            idempotency_key=f"test_{integration.id}_{datetime.now(timezone.utc).timestamp()}",
+            user_id=current_user.id,
         )
         if not success:
             raise HTTPException(
@@ -412,11 +420,13 @@ def test_notification_integration(
                 detail=f"Failed to deliver test message to {integration.type}: {err}",
             )
         return {"message": f"Test message dispatched successfully to {integration.name}."}
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.error("Test notification failed: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Test notification failed: {str(exc)}",
+            detail="Test notification failed. Please retry later.",
         )
 
 
