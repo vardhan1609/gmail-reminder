@@ -39,6 +39,12 @@ if (SERVICE_TOKEN.length < 32 || ["change-me", "changeme"].includes(SERVICE_TOKE
 }
 const CONFIG_FILE = path.join(__dirname, "bridge-config.json");
 
+function isStrongWebhookVerifyToken(value) {
+  return typeof value === "string"
+    && value.length >= 32
+    && !["change-me", "changeme", "change-me-webhook"].includes(value.toLowerCase());
+}
+
 const app = express();
 app.disable("x-powered-by");
 app.use(express.json());
@@ -117,13 +123,18 @@ app.post("/api/configure", requireAuth, (req, res) => {
         .status(400)
         .json({ error: "phoneNumberId and businessToken are required" });
     }
+    if (!isStrongWebhookVerifyToken(verifyToken)) {
+      return res.status(400).json({
+        error: "A unique webhook verify token of at least 32 characters is required.",
+      });
+    }
 
     // Save to config file
     saveConfig({
       mode: "meta",
       phoneNumberId,
       businessToken,
-      verifyToken: verifyToken || "change-me-webhook",
+      verifyToken,
     });
 
     // Update env vars in-process for hot-reload
@@ -337,9 +348,12 @@ function startMeta() {
   metaConfig.businessToken =
     process.env.WHATSAPP_BUSINESS_TOKEN || savedConfig.businessToken || "";
   metaConfig.verifyToken =
-    process.env.WHATSAPP_VERIFY_TOKEN ||
-    savedConfig.verifyToken ||
-    "change-me-webhook";
+    process.env.WHATSAPP_VERIFY_TOKEN || savedConfig.verifyToken || "";
+  if (!isStrongWebhookVerifyToken(metaConfig.verifyToken)) {
+    throw new Error(
+      "WHATSAPP_VERIFY_TOKEN must be configured with a unique random value of at least 32 characters."
+    );
+  }
   metaConfig.graphApiVersion =
     process.env.WHATSAPP_GRAPH_API_VERSION || "v21.0";
   metaConfig.graphUrl = `https://graph.facebook.com/${metaConfig.graphApiVersion}/${metaConfig.phoneNumberId}/messages`;
@@ -551,8 +565,9 @@ async function main() {
     startMeta();
   }
 
-  app.listen(PORT, () => {
-    console.log(`WhatsApp bridge listening on :${PORT} (mode: ${currentMode})`);
+  // This bridge is a local sidecar, not a network-facing service.
+  app.listen(PORT, "127.0.0.1", () => {
+    console.log(`WhatsApp bridge listening on 127.0.0.1:${PORT} (mode: ${currentMode})`);
   });
 }
 
