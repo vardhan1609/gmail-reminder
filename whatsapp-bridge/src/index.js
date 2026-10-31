@@ -336,10 +336,10 @@ function startMeta() {
     process.env.WHATSAPP_PHONE_NUMBER_ID || savedConfig.phoneNumberId || "";
   metaConfig.businessToken =
     process.env.WHATSAPP_BUSINESS_TOKEN || savedConfig.businessToken || "";
+  // Never install a predictable webhook verification secret. If it is not
+  // configured, webhook verification remains disabled and GET /webhook fails closed.
   metaConfig.verifyToken =
-    process.env.WHATSAPP_VERIFY_TOKEN ||
-    savedConfig.verifyToken ||
-    "change-me-webhook";
+    process.env.WHATSAPP_VERIFY_TOKEN || savedConfig.verifyToken || "";
   metaConfig.graphApiVersion =
     process.env.WHATSAPP_GRAPH_API_VERSION || "v21.0";
   metaConfig.graphUrl = `https://graph.facebook.com/${metaConfig.graphApiVersion}/${metaConfig.phoneNumberId}/messages`;
@@ -425,7 +425,7 @@ function startMeta() {
     const token = req.query["hub.verify_token"];
     const challenge = req.query["hub.challenge"];
 
-    if (mode === "subscribe" && token === metaConfig.verifyToken) {
+    if (metaConfig.verifyToken && mode === "subscribe" && token === metaConfig.verifyToken) {
       console.log("✅ Webhook verified by Meta.");
       return res.status(200).send(challenge);
     }
@@ -434,6 +434,9 @@ function startMeta() {
 
   // -- Webhook events --
   app.post("/webhook", (req, res) => {
+    // This endpoint is intentionally reachable by Meta, but payload contents
+    // are untrusted until an app-secret signature verifier is configured.
+    // Do not log attacker-controlled message bodies or sender identifiers.
     const body = req.body;
 
     if (body?.object === "whatsapp_business_account") {
@@ -444,16 +447,12 @@ function startMeta() {
           const value = change.value || {};
           if (value.messages) {
             for (const msg of value.messages) {
-              console.log(
-                `📩 Incoming from ${msg.from}: ${msg.text?.body || "[non-text]"}`
-              );
+              // Message content is deliberately not logged.
             }
           }
           if (value.statuses) {
             for (const status of value.statuses) {
-              console.log(
-                `📊 Status ${status.id}: ${status.status} (to ${status.recipient_id})`
-              );
+              // Delivery metadata is deliberately not logged.
             }
           }
         }
@@ -551,8 +550,8 @@ async function main() {
     startMeta();
   }
 
-  app.listen(PORT, () => {
-    console.log(`WhatsApp bridge listening on :${PORT} (mode: ${currentMode})`);
+  app.listen(PORT, "127.0.0.1", () => {
+    console.log(`WhatsApp bridge listening on 127.0.0.1:${PORT} (mode: ${currentMode})`);
   });
 }
 
