@@ -51,3 +51,60 @@ def test_cashfree_webhook_signature(monkeypatch):
     headers = {"x-webhook-signature": signature, "x-webhook-timestamp": timestamp}
     assert CashfreeAdapter().verify_webhook(body, headers)
     assert not CashfreeAdapter().verify_webhook(body, {"x-webhook-signature": "invalid"})
+
+from datetime import datetime, timezone
+
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
+
+from app.models.db_models import Base, SubscriptionModel, UserModel
+import app.services.billing as billing
+
+
+def test_basic_monthly_quota_and_whatsapp_gate(monkeypatch):
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(engine)
+    TestSession = sessionmaker(bind=engine, expire_on_commit=False)
+    monkeypatch.setattr(billing, "SessionLocal", TestSession)
+
+    with TestSession() as db:
+        user = UserModel(
+            email="billing-test@example.com",
+            password_hash="not-used",
+            is_verified=True,
+            is_active=True,
+            is_admin=False,
+            mfa_enabled=False,
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        db.add(SubscriptionModel(
+            user_id=user.id,
+            plan_code="basic",
+            status="active",
+            current_period_start=datetime.now(timezone.utc),
+            current_period_end=datetime(2099, 1, 1, tzinfo=timezone.utc),
+        ))
+        db.commit()
+        user_id = user.id
+
+    allowed, reason = billing.reserve_notification_usage(user_id, "whatsapp-test", "whatsapp")
+    assert not allowed
+    assert "Premium" in reason
+
+    for index in range(100):
+        key = f"basic-quota-{index}"
+        allowed, reason = billing.reserve_notification_usage(user_id, key, "telegram")
+        assert allowed, reason
+        billing.finish_notification_usage(user_id, key, True)
+
+    allowed, reason = billing.reserve_notification_usage(user_id, "basic-quota-over", "telegram")
+    assert not allowed
+    assert "100" in reason
+    engine.dispose()
