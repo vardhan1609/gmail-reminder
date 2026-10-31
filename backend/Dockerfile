@@ -25,7 +25,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy WhatsApp bridge code and install Node dependencies
 COPY whatsapp-bridge ./whatsapp-bridge
-RUN cd whatsapp-bridge && npm install --omit=dev --no-audit
+RUN cd whatsapp-bridge && npm ci --omit=dev --no-audit
 
 # Copy FastAPI backend code and migration configuration
 COPY backend/app ./app
