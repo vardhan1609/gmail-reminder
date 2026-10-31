@@ -130,6 +130,7 @@ class Settings(BaseSettings):
             "SECRET_KEY": self.secret_key,
             "GOOGLE_TOKEN_ENCRYPTION_KEY": self.google_token_encryption_key,
             "WHATSAPP_SERVICE_TOKEN": self.whatsapp_service_token,
+            "API_KEY": self.api_key or "",
         }
         invalid = [name for name, value in required_secrets.items() if value.strip().lower() in placeholders or len(value) < 32]
         if invalid:
