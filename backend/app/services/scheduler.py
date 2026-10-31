@@ -121,6 +121,32 @@ def _poll_all_accounts(db, user_id: Optional[str] = None, user_email: Optional[s
     for account in accounts:
         unique_accounts[(account.get("email", "").lower(), account.get("token_path", ""))] = account
     accounts = list(unique_accounts.values())
+
+    # A downgrade must also stop polling mailboxes above the new plan allowance.
+    from app.database.session import SessionLocal
+    from app.services.billing import PLAN_CATALOG, get_active_subscription
+    billing_db = SessionLocal()
+    try:
+        by_owner = {}
+        for item in accounts:
+            owner = item.get("user_id")
+            if owner:
+                by_owner.setdefault(owner, []).append(item)
+        blocked_ids = set()
+        for owner, owner_accounts in by_owner.items():
+            subscription = get_active_subscription(billing_db, owner)
+            allowance = PLAN_CATALOG[subscription.plan_code]["gmail_accounts"]
+            ordered = sorted(owner_accounts, key=lambda item: (str(item.get("created_at") or ""), item.get("email", "").lower()))
+            for blocked in ordered[allowance:]:
+                blocked_ids.add((blocked.get("email", "").lower(), blocked.get("token_path", "")))
+                logger.warning("Mailbox %s paused: %s plan allows %d Gmail account(s)", blocked.get("email"), subscription.plan_code, allowance)
+        accounts = [
+            item for item in accounts
+            if (item.get("email", "").lower(), item.get("token_path", "")) not in blocked_ids
+        ]
+    finally:
+        billing_db.close()
+
     if not accounts:
         logger.info("No active Gmail accounts to poll.")
         return
