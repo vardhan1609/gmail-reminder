@@ -1,0 +1,37 @@
+name: Fix WhatsApp bridge audit dependencies
+
+on:
+  push:
+    branches:
+      - security/harden-v01-v18
+
+permissions:
+  contents: write
+
+jobs:
+  fix-bridge-lockfile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: security/harden-v01-v18
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Apply compatible npm audit fixes
+        run: |
+          cd whatsapp-bridge
+          npm audit fix --package-lock-only --no-fund
+          npm audit --omit=dev --audit-level=high
+      - name: Commit updated bridge lockfile
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add whatsapp-bridge/package-lock.json
+          if git diff --cached --quiet; then
+            echo "No bridge lockfile changes."
+          else
+            git commit -m "security: update vulnerable WhatsApp bridge transitive dependencies"
+            git push origin HEAD:security/harden-v01-v18
+          fi
