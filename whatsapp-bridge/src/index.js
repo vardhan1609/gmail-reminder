@@ -155,7 +155,7 @@ app.post("/api/configure", requireAuth, (req, res) => {
       // Already in meta mode — update live refs
       metaConfig.phoneNumberId = phoneNumberId;
       metaConfig.businessToken = businessToken;
-      metaConfig.verifyToken = verifyToken || metaConfig.verifyToken;
+      metaConfig.verifyToken = verifyToken;
       metaConfig.graphUrl = `https://graph.facebook.com/${metaConfig.graphApiVersion}/${phoneNumberId}/messages`;
       isReady = true;
 
@@ -458,16 +458,12 @@ function startMeta() {
           const value = change.value || {};
           if (value.messages) {
             for (const msg of value.messages) {
-              console.log(
-                `📩 Incoming from ${msg.from}: ${msg.text?.body || "[non-text]"}`
-              );
+              // Message content and sender identifiers are not written to logs.
             }
           }
           if (value.statuses) {
             for (const status of value.statuses) {
-              console.log(
-                `📊 Status ${status.id}: ${status.status} (to ${status.recipient_id})`
-              );
+              // Delivery metadata is intentionally not logged here.
             }
           }
         }
