@@ -15,6 +15,7 @@ from pydantic import BaseModel, EmailStr, Field
 from google_auth_oauthlib.flow import Flow
 from google.auth.transport.requests import Request as GoogleRequest
 from google.oauth2 import id_token
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -152,7 +153,16 @@ def register(req: RegisterRequest, request: Request, db: Session = Depends(get_d
         mfa_enabled=False,
     )
     db.add(new_user)
-    db.commit()
+    try:
+        # The database UNIQUE constraint is the concurrency-safe authority;
+        # the earlier SELECT is only a user-friendly fast path.
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        auth_service.verify_password(req.password, auth_service._DUMMY_PASSWORD_HASH)
+        return {
+            "message": "If this address can be registered, verification instructions will be sent."
+        }
     db.refresh(new_user)
 
     # New accounts start on the Basic tier; Premium is activated only after verified payment.

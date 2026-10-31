@@ -97,7 +97,7 @@ class Settings(BaseSettings):
 
     # WhatsApp Integration
     whatsapp_provider: str = "webjs"  # "webjs", "meta", or "dry_run"
-    whatsapp_service_url: str = "http://localhost:3000"
+    whatsapp_service_url: str = "http://127.0.0.1:3000"
     whatsapp_service_token: str = ""
     whatsapp_destination: str = ""
     whatsapp_phone_number_id: str = ""
