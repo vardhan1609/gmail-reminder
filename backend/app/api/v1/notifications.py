@@ -6,7 +6,7 @@ from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.database.db import get_db
-from app.middleware.auth import require_api_key, get_optional_current_user
+from app.middleware.auth import get_current_user
 from app.models.db_models import UserModel
 from app.schemas.notifications import (
     NotificationTestRequest,
@@ -19,8 +19,12 @@ from app.services.telegram import validate_chat_id
 router = APIRouter(prefix="/notifications", tags=["Notifications V1"])
 
 
-@router.post("/test", dependencies=[Depends(require_api_key)])
-def send_test_notification(payload: NotificationTestRequest, db=Depends(get_db)):
+@router.post("/test")
+def send_test_notification(
+    payload: NotificationTestRequest,
+    current_user: UserModel = Depends(get_current_user),
+    db=Depends(get_db),
+):
     """Sends a manual test notification to verified destination."""
     channel = payload.channel.lower()
     if channel not in ("whatsapp", "whatsapp_meta", "telegram"):
@@ -32,9 +36,14 @@ def send_test_notification(payload: NotificationTestRequest, db=Depends(get_db))
     target_id = payload.destination_id
     if not target_id:
         # Check for registered destination
-        dest = db.destinations.find_one({"type": channel, "is_default": True}) or db.destinations.find_one({"type": channel})
+        dest = db.destinations.find_one({"user_id": current_user.id, "type": channel, "is_default": True}) or db.destinations.find_one({"user_id": current_user.id, "type": channel})
         if dest:
             target_id = dest.get("target_id")
+
+    if target_id:
+        owned = db.destinations.find_one({"user_id": current_user.id, "type": channel, "target_id": target_id})
+        if not owned:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Notification destination not found.")
 
     if not target_id:
         raise HTTPException(
@@ -56,31 +65,30 @@ def send_test_notification(payload: NotificationTestRequest, db=Depends(get_db))
         notification_type="test",
         message=payload.message or "🔔 Test notification from Gmail Reminder System",
         idempotency_key=test_key,
-        user_id=current_user.id if current_user else None,
+        user_id=current_user.id,
     )
 
     if not success:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Test notification delivery failed: {err}",
+            detail="Test notification delivery failed. Please try again later.",
         )
 
     return {"status": "sent", "channel": channel, "destination_id": target_id}
 
 
-@router.get("", response_model=NotificationDeliveryListResponse, dependencies=[Depends(require_api_key)])
+@router.get("", response_model=NotificationDeliveryListResponse)
 def list_notifications(
     limit: int = Query(50, ge=1, le=100),
     skip: int = Query(0, ge=0),
     channel: Optional[str] = Query(None),
     status_filter: Optional[str] = Query(None, alias="status"),
-    current_user: Optional[UserModel] = Depends(get_optional_current_user),
+    current_user: UserModel = Depends(get_current_user),
     db=Depends(get_db),
 ):
     """View delivery audit trail and history."""
-    filter_dict = {}
-    if current_user and not current_user.is_admin:
-        filter_dict["user_id"] = current_user.id
+    # Never expose another tenant's data or records without a tenant owner.
+    filter_dict = {"user_id": current_user.id}
     if channel:
         filter_dict["channel"] = channel
     if status_filter:
