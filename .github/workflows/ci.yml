@@ -9,6 +9,8 @@ on:
 jobs:
   backend-tests:
     runs-on: ubuntu-latest
+    # Prevent a single blocked test from occupying a runner indefinitely.
+    timeout-minutes: 20
 
     services:
       postgres:
@@ -41,7 +43,7 @@ jobs:
           cd backend
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pytest pytest-asyncio pip-audit
+          pip install pytest pytest-asyncio pytest-timeout pip-audit
 
       - name: Audit Python dependencies
         run: |
@@ -61,7 +63,7 @@ jobs:
           SECRET_KEY: ci-test-secret-key-32-chars-long-here
         run: |
           cd backend
-          pytest -v --tb=short
+          pytest -v --tb=short --timeout=60 --timeout-method=signal
 
   frontend-build:
     runs-on: ubuntu-latest
@@ -115,4 +117,3 @@ jobs:
         run: |
           cd whatsapp-bridge
           npm audit --omit=dev --audit-level=high
-
