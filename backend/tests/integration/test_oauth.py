@@ -1,24 +1,34 @@
 """
-Integration tests for Google OAuth login redirect and callback handling.
+Security regression tests for retired legacy OAuth routes and the session-bound V1 flow.
 """
 from fastapi.testclient import TestClient
 
 
-def test_oauth_login_redirect(client: TestClient, monkeypatch):
-    monkeypatch.setattr(
-        "app.services.gmail_service.build_auth_url",
-        lambda state=None: ("https://accounts.google.com/o/oauth2/auth?client_id=test", "state_123"),
-    )
-    resp = client.get("/auth/google/login", follow_redirects=False)
-    assert resp.status_code == 307
-    assert "accounts.google.com" in resp.headers["location"]
+def test_legacy_oauth_routes_are_not_mounted(client: TestClient):
+    """Legacy routes without per-user session/state checks must not be exposed."""
+    assert client.get("/auth/google/login", follow_redirects=False).status_code == 404
+    assert client.get("/auth/google/callback?code=mock_code_abc", follow_redirects=False).status_code == 404
 
 
-def test_oauth_callback_creates_account(client: TestClient, monkeypatch):
-    monkeypatch.setattr(
-        "app.api.auth.exchange_code_for_token",
-        lambda code: ("student@university.edu", "tokens/gmail_test.json"),
+def test_gmail_oauth_callback_rejects_missing_state(client: TestClient):
+    """An authenticated Gmail callback without the one-time state cookie is rejected."""
+    reg = client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": "oauth_state_test@example.com",
+            "password": "StrongPassword123!",
+            "full_name": "OAuth State Test",
+            "terms_accepted": True,
+        },
     )
-    resp = client.get("/auth/google/callback?code=mock_code_abc", follow_redirects=False)
-    assert resp.status_code == 307
-    assert "/dashboard" in resp.headers["location"]
+    assert reg.status_code == 201
+    login = client.post(
+        "/api/v1/auth/login",
+        json={"email": "oauth_state_test@example.com", "password": "StrongPassword123!"},
+    )
+    assert login.status_code == 200
+    callback = client.get(
+        "/api/v1/integrations/gmail/callback?code=mock_code_abc&state=attacker-controlled"
+    )
+    assert callback.status_code == 400
+    assert "state" in callback.json()["detail"].lower()
