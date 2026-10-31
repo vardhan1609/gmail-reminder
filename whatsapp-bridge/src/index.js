@@ -47,7 +47,12 @@ function isStrongWebhookVerifyToken(value) {
 
 const app = express();
 app.disable("x-powered-by");
-app.use(express.json());
+app.use(express.json({
+  verify: (req, _res, buffer) => {
+    // Preserve the exact bytes for Meta's X-Hub-Signature-256 validation.
+    req.rawBody = Buffer.from(buffer);
+  },
+}));
 
 // Serve static files (setup UI)
 app.use(express.static(path.join(__dirname, "..", "public")));
@@ -448,6 +453,23 @@ function startMeta() {
 
   // -- Webhook events --
   app.post("/webhook", (req, res) => {
+    // Meta webhooks are public by design, so authenticate the exact raw body
+    // with the Meta App Secret before accepting the event.
+    const appSecret = process.env.WHATSAPP_APP_SECRET || "";
+    const suppliedSignature = req.get("x-hub-signature-256") || "";
+    if (!appSecret) {
+      return res.status(503).json({ error: "Webhook signature verification is not configured." });
+    }
+    const expectedSignature = "sha256=" + crypto
+      .createHmac("sha256", appSecret)
+      .update(req.rawBody || Buffer.alloc(0))
+      .digest("hex");
+    const supplied = Buffer.from(suppliedSignature);
+    const expected = Buffer.from(expectedSignature);
+    if (supplied.length !== expected.length || !crypto.timingSafeEqual(supplied, expected)) {
+      return res.status(401).json({ error: "Invalid webhook signature." });
+    }
+
     const body = req.body;
 
     if (body?.object === "whatsapp_business_account") {
