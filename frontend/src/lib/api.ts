@@ -190,6 +190,7 @@ export const api = {
   cancelSubscription: () => request<{ message: string }>("/billing/cancel", { method: "POST" }),
   getAdminOverview: () => request<{ customers: number; active_subscriptions: number; basic_customers: number; premium_customers: number; paid_orders: number; pending_orders: number }>("/billing/admin/overview"),
   getAdminCustomers: (q = "") => request<{ customers: Array<any>; total: number }>("/billing/admin/customers?q=" + encodeURIComponent(q)),
+  getAdminOrders: () => request<{ orders: Array<any> }>("/billing/admin/orders"),
   updateAdminCustomer: (id: string, body: { is_active?: boolean; plan_code?: "basic" | "premium" }) => request<{ message: string }>(`/billing/admin/customers/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
 
   // Auth
