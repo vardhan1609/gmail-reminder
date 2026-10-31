@@ -139,3 +139,22 @@ def test_scheduler_does_not_claim_ownerless_mailbox_by_email(monkeypatch):
 
     sync.assert_not_called()
     billing_session.close.assert_called_once()
+
+
+def test_bridge_webhook_configuration_fails_closed_and_binds_loopback():
+    """Guard bridge network exposure and unsafe webhook defaults."""
+    from pathlib import Path
+
+    repo_root = Path(__file__).resolve().parents[3]
+    source = (repo_root / "whatsapp-bridge" / "src" / "index.js").read_text(
+        encoding="utf-8"
+    )
+
+    assert 'app.listen(PORT, "127.0.0.1"' in source
+    assert 'savedConfig.verifyToken || ""' in source
+    assert '"change-me-webhook"' not in source.split("function startMeta()", 1)[1].split(
+        "function ", 1
+    )[0]
+    assert 'app.post("/api/configure", requireAuth' in source
+    assert 'metaConfig.verifyToken = verifyToken;' in source
+    assert 'msg.text?.body' not in source
