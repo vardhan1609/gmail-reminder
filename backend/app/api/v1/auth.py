@@ -6,6 +6,7 @@ password reset, TOTP MFA enrollment and verification, and session management.
 from __future__ import annotations
 
 import secrets
+from urllib.parse import quote
 from datetime import datetime, timezone
 
 from typing import Any, Dict, List, Optional
@@ -31,6 +32,7 @@ from app.models.db_models import (
     UserSessionModel,
 )
 from app.services import auth_service, mfa_service
+from app.services.email_service import send_transactional_email
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -114,6 +116,13 @@ class SessionResponse(BaseModel):
 def register(req: RegisterRequest, request: Request, db: Session = Depends(get_db_session)):
     """Register a new user account with Argon2id password hashing and email verification."""
     email_clean = req.email.lower().strip()
+    client_ip = request.client.host if request.client else "unknown"
+    allowed, cooldown = auth_service.check_audit_rate_limit(
+        db, "registration_attempt", client_ip, max_attempts=10
+    )
+    if not allowed:
+        raise HTTPException(status_code=429, detail="Too many registration attempts. Please try again later.", headers={"Retry-After": str(cooldown)})
+    auth_service.log_audit_event(db, "registration_attempt", ip_address=client_ip)
 
     if not req.terms_accepted:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="You must accept the Terms of Service and Privacy Policy to create an account.")
@@ -126,10 +135,11 @@ def register(req: RegisterRequest, request: Request, db: Session = Depends(get_d
     # Check duplicate
     existing = db.query(UserModel).filter(UserModel.email == email_clean).first()
     if existing:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="An account with this email address already exists.",
-        )
+        # Keep the response identical for existing and unregistered addresses.
+        auth_service.verify_password(req.password, auth_service._DUMMY_PASSWORD_HASH)
+        return {
+            "message": "If this address can be registered, verification instructions will be sent."
+        }
 
     pwd_hash = auth_service.hash_password(req.password)
     new_user = UserModel(
@@ -169,8 +179,22 @@ def register(req: RegisterRequest, request: Request, db: Session = Depends(get_d
     db.add(prefs)
     db.commit()
 
-    # Create verification token
+    # Deliver the one-time verification token out-of-band by email.
     verification_token = auth_service.create_email_verification_token(db, new_user.id)
+    verification_url = (
+        f"{settings.frontend_base_url.rstrip('/')}/verify-email"
+        f"?token={quote(verification_token, safe='')}"
+    )
+    try:
+        send_transactional_email(
+            new_user.email,
+            "Verify your Gmail Reminder account",
+            f"Use this link to verify your email address. This link expires in "
+            f"{settings.email_verification_token_expiry_hours} hours:\n\n"
+            f"{verification_url}\n\nIf you did not create this account, ignore this email.",
+        )
+    except Exception:
+        logger.error("Unable to send verification email for newly registered user %s", new_user.id)
 
     client_ip = request.client.host if request.client else None
     user_agent = request.headers.get("user-agent")
@@ -184,10 +208,7 @@ def register(req: RegisterRequest, request: Request, db: Session = Depends(get_d
     )
 
     return {
-        "message": "Registration successful. Please verify your email address to continue.",
-        "user_id": new_user.id,
-        "email": new_user.email,
-        "verification_token": verification_token,
+        "message": "If this address can be registered, verification instructions will be sent."
     }
 
 
@@ -206,7 +227,18 @@ def login(
     client_ip = request.client.host if request.client else "unknown"
     rate_key = f"{client_ip}:{email_clean}"
 
-    # Rate limiting check
+    # Shared per-IP limit persists across process restarts and workers.
+    ip_allowed, ip_cooldown = auth_service.check_audit_rate_limit(
+        db, "login_failed", client_ip, max_attempts=20
+    )
+    if not ip_allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many login attempts. Please try again later.",
+            headers={"Retry-After": str(ip_cooldown)},
+        )
+
+    # Additional per-account in-process throttling.
     allowed, cooldown = auth_service.check_rate_limit(rate_key)
     if not allowed:
         raise HTTPException(
@@ -216,7 +248,9 @@ def login(
         )
 
     user = db.query(UserModel).filter(UserModel.email == email_clean).first()
-    if not user or not auth_service.verify_password(req.password, user.password_hash):
+    password_hash = user.password_hash if user else auth_service._DUMMY_PASSWORD_HASH
+    password_valid = auth_service.verify_password(req.password, password_hash)
+    if not user or not password_valid or not user.is_active:
         auth_service.record_failed_attempt(rate_key)
         auth_service.log_audit_event(
             db,
@@ -228,12 +262,6 @@ def login(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password.",
-        )
-
-    if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Account is disabled. Please contact support.",
         )
 
     # Authentication successful
@@ -271,7 +299,6 @@ def login(
     return {
         "message": "Login successful.",
         "mfa_required": is_mfa_req,
-        "token": raw_token,  # Also returned for clients/tests that use Authorization Bearer
         "user": {
             "id": user.id,
             "email": user.email,
@@ -338,10 +365,31 @@ def forgot_password(
     Returns generic response to avoid email enumeration.
     """
     email_clean = req.email.lower().strip()
+    client_ip = request.client.host if request.client else "unknown"
+    allowed, cooldown = auth_service.check_audit_rate_limit(
+        db, "password_reset_request", client_ip, max_attempts=10
+    )
+    if not allowed:
+        # Keep the response generic even when the caller is throttled.
+        raise HTTPException(status_code=429, detail="Too many requests. Please try again later.", headers={"Retry-After": str(cooldown)})
+    auth_service.log_audit_event(db, "password_reset_request", ip_address=client_ip)
     user = db.query(UserModel).filter(UserModel.email == email_clean).first()
-    reset_token = None
     if user and user.is_active:
         reset_token = auth_service.create_password_reset_token(db, user.id)
+        reset_url = (
+            f"{settings.frontend_base_url.rstrip('/')}/reset-password"
+            f"?token={quote(reset_token, safe='')}"
+        )
+        try:
+            send_transactional_email(
+                user.email,
+                "Reset your Gmail Reminder password",
+                f"A password reset was requested for your account. This link expires in "
+                f"{settings.password_reset_token_expiry_hours} hour(s):\n\n"
+                f"{reset_url}\n\nIf you did not request this, ignore this email.",
+            )
+        except Exception:
+            logger.error("Unable to send password reset email for account %s", user.id)
         auth_service.log_audit_event(
             db,
             event_type="password_reset_requested",
@@ -350,13 +398,9 @@ def forgot_password(
             user_agent=request.headers.get("user-agent"),
         )
 
-    # In dev or testing, we include reset_token in the payload
-    resp = {
+    return {
         "message": "If that email address is registered, password reset instructions have been sent."
     }
-    if reset_token:
-        resp["reset_token"] = reset_token
-    return resp
 
 
 @router.post("/reset-password")
