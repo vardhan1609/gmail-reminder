@@ -180,6 +180,15 @@ def test_password_reset_flow(client: TestClient, monkeypatch):
         json={"email": email, "password": old_password, "full_name": "Reset User", "terms_accepted": True},
     )
 
+    # Establish a session before resetting the password. That exact session
+    # must stop authenticating immediately after a successful reset.
+    old_login = client.post(
+        "/api/v1/auth/login",
+        json={"email": email, "password": old_password},
+    )
+    assert old_login.status_code == 200
+    old_session_cookies = old_login.cookies
+
     # Request reset
     forgot_res = client.post("/api/v1/auth/forgot-password", json={"email": email})
     assert forgot_res.status_code == 200
@@ -201,6 +210,10 @@ def test_password_reset_flow(client: TestClient, monkeypatch):
         json={"token": reset_token, "new_password": new_password},
     )
     assert good_reset.status_code == 200
+
+    # Password reset must revoke every previously-issued session cookie.
+    stale_session = client.get("/api/v1/auth/me", cookies=old_session_cookies)
+    assert stale_session.status_code == 401
 
     # Replay of reset token rejected
     replay_reset = client.post(
