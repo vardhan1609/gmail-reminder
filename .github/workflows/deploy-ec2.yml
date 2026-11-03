@@ -1,0 +1,83 @@
+name: Deploy to AWS EC2 (SSM)
+
+# Deploy only after the existing CI/CD Pipeline has completed successfully on main.
+on:
+  workflow_run:
+    workflows: ["CI/CD Pipeline"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: production-ec2-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.event == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: production
+    steps:
+      - name: Configure AWS credentials using GitHub OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Deploy through Systems Manager (no inbound SSH)
+        shell: bash
+        env:
+          INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${INSTANCE_ID}" ]]; then
+            echo "Set EC2_INSTANCE_ID in the production environment variables."
+            exit 1
+          fi
+
+          command_id="$(aws ssm send-command \
+            --instance-ids "${INSTANCE_ID}" \
+            --document-name "AWS-RunShellScript" \
+            --comment "Deploy gmail-reminder from main after CI passed" \
+            --parameters 'commands=["sudo /usr/local/bin/gmail-reminder-deploy"]' \
+            --query 'Command.CommandId' \
+            --output text)"
+
+          echo "SSM command: ${command_id}"
+          for attempt in $(seq 1 60); do
+            status="$(aws ssm get-command-invocation \
+              --command-id "${command_id}" \
+              --instance-id "${INSTANCE_ID}" \
+              --query 'Status' --output text 2>/dev/null || echo Pending)"
+
+            case "${status}" in
+              Success)
+                aws ssm get-command-invocation \
+                  --command-id "${command_id}" \
+                  --instance-id "${INSTANCE_ID}" \
+                  --query 'StandardOutputContent' --output text
+                exit 0
+                ;;
+              Failed|Cancelled|TimedOut|Undeliverable|Terminated)
+                aws ssm get-command-invocation \
+                  --command-id "${command_id}" \
+                  --instance-id "${INSTANCE_ID}" \
+                  --query '[Status,StandardErrorContent,StandardOutputContent]' \
+                  --output json
+                exit 1
+                ;;
+              *)
+                sleep 10
+                ;;
+            esac
+          done
+
+          echo "Timed out waiting for SSM deployment command."
+          exit 1
